@@ -1,0 +1,23 @@
+# Core dependencies
+streamlit
+google-generativeai
+httpx
+cachetools
+tenacity
+markdown
+
+# Document processing
+python-docx
+pypdf
+weasyprint
+
+# Web Scraping & Semantic Search
+playwright
+beautifulsoup4
+sentence-transformers
+scikit-learn
+torch
+torchvision
+
+# Utilities
+python-dotenv
