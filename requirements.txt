@@ -21,3 +21,8 @@ torchvision
 
 # Utilities
 python-dotenv
+
+# Testing
+pytest
+pytest-mock
+numpy
