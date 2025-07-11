@@ -70,43 +70,319 @@ class DocumentGenerator:
         bio.seek(0)
         return bio.getvalue()
 
-    def _create_pdf_from_markdown(self, markdown_content: str) -> bytes:
-        """Creates a styled PDF from Markdown content."""
-        html_content = markdown.markdown(markdown_content)
-        # Professional styling for the PDF
-        css = CSS(string='''
-            @page { size: A4; margin: 1.5cm; }
-            body { font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; font-size: 11pt; line-height: 1.5; color: #333; }
-            h1 { font-size: 22pt; color: #2c3e50; border-bottom: 2px solid #2c3e50; padding-bottom: 5px; margin-top: 0;}
-            h2 { font-size: 16pt; color: #34495e; border-bottom: 1px solid #bdc3c7; padding-bottom: 3px; margin-top: 20px; }
-            h3 { font-size: 12pt; color: #34495e; font-weight: bold; margin-top: 15px;}
+    def _get_theme_css(self, theme_name: str) -> str:
+        """
+        Returns CSS string for a given theme name, based on user's detailed theme document.
+        Converts inches to cm (1 inch = 2.54 cm) and points for spacing where appropriate.
+        """
+        # Helper for margin conversion: 0.75" = 1.905cm, 0.8" = 2.032cm, 0.9" = 2.286cm
+        # Spacing: 12pt between sections, 6pt between items
+
+        if theme_name == "Professional Classic": # Matches "Theme 1: Professional Classic" from user doc
+            return """
+                @page {
+                    size: A4;
+                    margin: 1.9cm; /* Approx 0.75" */
+                }
+                body {
+                    font-family: 'Times New Roman', Times, serif;
+                    font-size: 11pt;
+                    line-height: 1.4; /* Adjusted for TNR */
+                    color: #2d3748; /* Charcoal for body text */
+                    background-color: #ffffff; /* Pure white background */
+                }
+                h1 { /* Name */
+                    font-family: 'Times New Roman', Times, serif;
+                    font-size: 16pt;
+                    font-weight: bold;
+                    color: #1a365d; /* Deep Navy for name */
+                    margin-top: 0;
+                    margin-bottom: 0.2cm; /* Space before contact info */
+                    text-align: left; /* As per implied single column structure */
+                }
+                h1 + p { /* Contact Info paragraph immediately after H1 (Name) */
+                    font-family: 'Times New Roman', Times, serif;
+                    font-size: 10pt;
+                    color: #2d3748; /* Charcoal, or #718096 for dates/secondary per spec */
+                    margin-top: 0;
+                    margin-bottom: 0.8cm; /* Space after contact block */
+                    line-height: 1.3;
+                    text-align: left;
+                }
+                hr.name-divider { /* Thin horizontal line under name */
+                    border: 0;
+                    height: 0.5pt;
+                    background-color: #1a365d; /* Navy */
+                    margin-bottom: 0.8cm;
+                }
+                h2 { /* Section Headers */
+                    font-family: 'Times New Roman', Times, serif;
+                    font-size: 14pt;
+                    font-weight: bold;
+                    color: #1a365d; /* Deep Navy */
+                    margin-top: 12pt; /* 12pt between sections */
+                    margin-bottom: 8pt; /* Space before content in section */
+                    border-bottom: 0.5pt solid #718096; /* Subtle gray divider lines */
+                    padding-bottom: 2pt;
+                }
+                h3 { /* Subheadings (Job Titles, Company Names, Degree Titles) */
+                    font-family: 'Times New Roman', Times, serif;
+                    font-size: 12pt;
+                    font-weight: bold;
+                    color: #2d3748; /* Charcoal */
+                    margin-top: 8pt; /* Space above job title */
+                    margin-bottom: 2pt; /* Less space before company/date line */
+                }
+                h3 + p { /* Company | Location | Dates line OR Institution | Location | Year */
+                    font-family: 'Times New Roman', Times, serif;
+                    font-size: 10pt; /* Adjusted to match contact info spec */
+                    font-style: normal; /* Dates/secondary info might not need italic if gray */
+                    color: #718096; /* Subtle gray for dates and secondary info */
+                    margin-top: 0;
+                    margin-bottom: 6pt; /* 6pt between items */
+                }
+                ul {
+                    list-style-type: disc;
+                    padding-left: 20pt;
+                    margin-top: 0;
+                    margin-bottom: 6pt;
+                }
+                li {
+                    margin-bottom: 4pt; /* Slightly less than 6pt for list items */
+                    color: #2d3748; /* Body text color */
+                }
+                p { /* General paragraphs within sections */
+                    margin-top: 0;
+                    margin-bottom: 6pt; /* 6pt between items */
+                    color: #2d3748; /* Body text color */
+                }
+                strong { font-weight: bold; } /* Ensure markdown bold is honored */
+                em { font-style: italic; } /* Ensure markdown italic is honored */
+                a { color: #1a365d; text-decoration: underline; }
+            """
+        elif theme_name == "Modern Minimalist": # Matches "Theme 2: Modern Minimalist" from user doc
+            return """
+                @page {
+                    size: A4;
+                    /* Margins: 0.8" top/bottom (2.032cm), 0.9" left/right (2.286cm) */
+                    margin-top: 2cm; margin-bottom: 2cm;
+                    margin-left: 2.3cm; margin-right: 2.3cm;
+                    background-color: #fafafa; /* Off-white background */
+                }
+                body {
+                    font-family: 'Helvetica', 'Arial', sans-serif;
+                    font-size: 10.5pt;
+                    line-height: 1.5;
+                    color: #2d3748; /* Dark Gray for body text */
+                }
+                h1 { /* Name */
+                    font-family: 'Helvetica', 'Arial', sans-serif;
+                    font-size: 18pt;
+                    font-weight: bold;
+                    color: #4a5568; /* Slate Blue for name */
+                    margin-top: 0;
+                    margin-bottom: 0.1cm; /* Minimal space before contact */
+                    text-align: left;
+                }
+                /* For asymmetrical header: Name left, contact right. This is hard with current markdown.
+                   The current markdown has H1 then P for contact. We'll style H1+P for now.
+                   A true asymmetrical would need different HTML/Markdown structure. */
+                h1 + p { /* Contact Info */
+                    font-family: 'Helvetica', 'Arial', sans-serif;
+                    font-size: 9pt;
+                    color: #2d3748; /* Dark Gray */
+                    margin-top: 0;
+                    margin-bottom: 18pt; /* Spacing between sections */
+                    text-align: left; /* Default, will be single block */
+                }
+                /* Optional: thin accent line under contact info - not easily done with current h1+p */
+
+                h2 { /* Section Headers */
+                    font-family: 'Helvetica', 'Arial', sans-serif;
+                    font-size: 13pt;
+                    font-weight: bold; /* Spec says bold */
+                    color: #4a5568; /* Slate Blue */
+                    margin-top: 18pt; /* Spacing between sections */
+                    margin-bottom: 10pt; /* Space before content */
+                    padding-left: 8pt; /* For subtle left border space */
+                    border-left: 2pt solid #38b2ac; /* Teal subtle left border */
+                }
+                h3 { /* Subheadings (Job Titles, Company Names) */
+                    font-family: 'Helvetica', 'Arial', sans-serif;
+                    font-size: 11pt;
+                    /* font-weight: 600; /* semibold - CSS uses numeric or keywords like 'bold' */
+                    font-weight: bold; /* Using bold as semibold might not be available */
+                    color: #2d3748; /* Dark Gray */
+                    margin-top: 10pt;
+                    margin-bottom: 2pt;
+                }
+                h3 + p { /* Company | Location | Dates line */
+                    font-family: 'Helvetica', 'Arial', sans-serif;
+                    font-size: 9pt; /* Matched contact info size */
+                    font-style: normal;
+                    color: #4a5568; /* Slate Blue or Dark Gray */
+                    margin-top: 0;
+                    margin-bottom: 8pt; /* Spacing between items */
+                }
+                ul {
+                    list-style-type: none; /* Remove default bullets */
+                    padding-left: 15pt;
+                    margin-top: 0;
+                    margin-bottom: 8pt;
+                }
+                li {
+                    margin-bottom: 5pt;
+                    color: #2d3748; /* Body text color */
+                    position: relative; /* For custom bullet positioning */
+                    padding-left: 15pt; /* Space for custom bullet */
+                }
+                li::before { /* Circular bullet points in teal color */
+                    content: '●'; /* Unicode circle character */
+                    color: #38b2ac; /* Teal */
+                    font-size: 10pt; /* Adjust size of bullet */
+                    position: absolute;
+                    left: 0;
+                    top: 0.05em; /* Adjust vertical alignment */
+                }
+                p {
+                    margin-top: 0;
+                    margin-bottom: 8pt; /* Spacing between items */
+                }
+                strong { font-weight: bold; }
+                em { font-style: italic; }
+                a { color: #38b2ac; text-decoration: none; }
+            """
+        # Fallback to a very basic default if theme_name is unknown (or use Classic as default)
+        # For now, my previous "Classic Professional" can act as a fallback if needed,
+        # but the UI should only offer valid theme names.
+        # Let's make the original "Classic Professional" the ultimate fallback.
+        return """
+            @page { size: A4; margin: 1.8cm; }
+            body { font-family: 'Georgia', 'Times New Roman', serif; font-size: 11pt; line-height: 1.5; color: #333333; }
+            h1 { font-family: 'Georgia', serif; font-size: 26pt; color: #222222; margin-bottom: 0.3cm; margin-top: 0; text-align: center; }
+            h1 + p { font-family: 'Arial', 'Helvetica', sans-serif; font-size: 10pt; color: #454545; margin-top: 0; margin-bottom: 1cm; text-align: center; }
+            h2 { font-family: 'Georgia', serif; font-size: 15pt; color: #333333; border-bottom: 1.5px solid #555555; padding-bottom: 3px; margin-top: 1cm; margin-bottom: 0.5cm; text-transform: uppercase; font-weight: bold;}
+            h3 { font-family: 'Georgia', serif; font-size: 12pt; color: #333333; font-weight: bold; margin-top: 0.7cm; margin-bottom: 0.1cm;}
+            h3 + p { font-family: 'Arial', 'Helvetica', sans-serif; font-size: 10pt; font-style: italic; color: #454545; margin-top:0; margin-bottom: 0.3cm;}
             ul { list-style-type: disc; padding-left: 20px; }
-            p { margin-bottom: 10px; }
-            a { color: #2980b9; text-decoration: none; }
-        ''')
-        return HTML(string=html_content).write_pdf(stylesheets=[css])
+            li { margin-bottom: 0.25em; }
+            p { margin-bottom: 0.4em; }
+            a { color: #0000EE; text-decoration: underline; }
+            strong { font-weight: bold; }
+        """
+
+    def _create_pdf_from_markdown(self, markdown_content: str, theme_name: str = "Professional Classic") -> bytes:
+        """Creates a styled PDF from Markdown content using a specific theme."""
+        html_content = markdown.markdown(markdown_content, extensions=['markdown.extensions.tables']) # Added tables extension
+        
+        # Get CSS based on theme_name
+        theme_css_string = self._get_theme_css(theme_name)
+        css = CSS(string=theme_css_string)
+        
+        # Base styles that might apply to all themes or are general structure
+        # These are minimal now as most is in theme_css_string
+        html_doc = HTML(string=html_content)
+        return html_doc.write_pdf(stylesheets=[css])
 
     def generate_resume_markdown(self, user_profile: Dict, experiences: List[Dict[str, Any]]) -> str:
-        """Generates the resume content as a Markdown string."""
-        md_parts = [f"# {user_profile.get('full_name', 'Your Name')}"]
-        contact_info = " | ".join(filter(None, [user_profile.get('phone'), user_profile.get('email'), user_profile.get('address'), user_profile.get('linkedin_url')]))
-        md_parts.append(contact_info)
-        
-        if user_profile.get('professional_summary'):
-            md_parts.append("\n## PROFESSIONAL SUMMARY")
-            md_parts.append(f"{user_profile.get('professional_summary')}")
-        
+        """
+        Generates the resume content as a Markdown string based on a predefined template
+        and user data.
+        """
+        # Helper to get data or return empty string
+        def get_data(data_dict, key, default=''):
+            return data_dict.get(key, default) if data_dict and data_dict.get(key) else default
+
+        # --- Main Information ---
+        full_name = get_data(user_profile, 'full_name', 'Your Name')
+        # resume_headline = get_data(user_profile, 'resume_headline', '') # Placeholder for a future field
+        phone = get_data(user_profile, 'phone')
+        email = get_data(user_profile, 'email')
+        # location = get_data(user_profile, 'address') # Using 'address' as 'location'
+        linkedin = get_data(user_profile, 'linkedin_url')
+        contact_parts = [f"Telephone: {phone}" if phone else None,
+                         f"Email: {email}" if email else None,
+                        #  f"Address: {location}" if location else None, # Decided to use LinkedIn for brevity here
+                         f"LinkedIn: {linkedin}" if linkedin else None]
+        contact_line = " | ".join(filter(None, contact_parts))
+
+        md_content = f"# {full_name}\n"
+        # if resume_headline: # Add if field exists
+        #     md_content += f"_{resume_headline}_\n" # Example: Italicized headline
+        md_content += f"{contact_line}\n"
+
+        # --- Career Summary ---
+        career_summary = get_data(user_profile, 'professional_summary')
+        if career_summary:
+            md_content += "\n## CAREER SUMMARY\n"
+            md_content += f"{career_summary}\n"
+
+        # --- Education ---
+        # Assuming education is stored in user_profile or a separate list.
+        # For now, let's assume it's not explicitly structured in the DB like the template.
+        # This section would need to be adapted if education data is available.
+        # Example structure if education was a list of dicts in user_profile:
+        # education_entries = get_data(user_profile, 'education', [])
+        # if education_entries:
+        #     md_content += "\n## EDUCATION\n"
+        #     for edu in education_entries:
+        #         md_content += f"**{get_data(edu, 'degree_title')}**\n"
+        #         md_content += f"{get_data(edu, 'institution')} | {get_data(edu, 'location')} | {get_data(edu, 'graduation_year')}\n\n"
+        # For now, this section is omitted as data structure is not present in user_profile for multiple degrees.
+        # A single "education" field in user_profile could be added if needed.
+
+        # --- Skills ---
+        # Consolidating all 'related_skills' from experiences into one list for now.
+        # The template's categorized skills are not directly supported by current DB.
+        all_skills = []
+        for exp in experiences:
+            skills_str = get_data(exp, 'related_skills')
+            if skills_str:
+                all_skills.extend([s.strip() for s in skills_str.split(',') if s.strip()])
+
+        unique_skills = sorted(list(set(all_skills))) # Get unique skills and sort them
+        if unique_skills:
+            md_content += "\n## SKILLS\n"
+            # Display skills as a flat list for now
+            for skill in unique_skills:
+                md_content += f"- {skill}\n"
+            md_content += "\n"
+
+
+        # --- Professional Experience ---
         if experiences:
-            md_parts.append("\n## PROFESSIONAL EXPERIENCE")
+            md_content += "## PROFESSIONAL EXPERIENCE\n"
             for exp in experiences:
-                md_parts.append(f"\n### {exp.get('title')}")
-                md_parts.append(f"**{exp.get('company')}** | *{exp.get('dates')}*")
-                bullets = exp.get('resume_bullets', '').split('\n')
-                for bullet in bullets:
-                    if bullet.strip():
-                        md_parts.append(f"- {bullet.strip().lstrip('- ')}")
+                md_content += f"\n### {get_data(exp, 'title')}\n"
+                company_line = f"**{get_data(exp, 'company')}**"
+                if get_data(exp, 'dates'): # Assuming location is not stored per experience
+                    company_line += f" | {get_data(exp, 'dates')}"
+                md_content += f"{company_line}\n"
+
+                # Using 'resume_bullets' for responsibilities/achievements
+                # The template has "Key Responsibilities" and "Key Achievement" which is more structured.
+                # We'll list all resume_bullets under the job.
+                # Future: Could try to parse resume_bullets if they follow a pattern, or add new DB fields.
+                resume_bullets = get_data(exp, 'resume_bullets')
+                if resume_bullets:
+                    # md_content += "Key Responsibilities:\n" # Could add this if formatting all bullets as responsibilities
+                    for bullet in resume_bullets.split('\n'):
+                        if bullet.strip():
+                            md_content += f"- {bullet.strip().lstrip('- ')}\n"
+                md_content += "\n"
         
-        return "\n".join(md_parts)
+        # --- Certifications & Professional Development ---
+        # This data is not currently in the user_profile or experiences.
+        # This section would need new DB fields and UI elements to manage.
+        # For now, this section is omitted.
+        # Example if data was available:
+        # certifications = get_data(user_profile, 'certifications', [])
+        # if certifications:
+        #     md_content += "\n## CERTIFICATIONS & PROFESSIONAL DEVELOPMENT\n"
+        #     for cert in certifications:
+        #         md_content += f"{get_data(cert, 'name')} | {get_data(cert, 'issuing_body')} | {get_data(cert, 'date')}\n"
+
+        return md_content.strip()
 
     def generate_ksc_response(self, ksc_question: str, user_profile: Dict, experiences: List[Dict[str, Any]], company_intel: Dict[str, str], role_title: str) -> Dict[str, Any]:
         """Generates a KSC response and returns a dictionary with content."""

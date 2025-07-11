@@ -12,6 +12,7 @@ if 'job_desc' not in st.session_state: st.session_state.job_desc = ""
 if 'company_name' not in st.session_state: st.session_state.company_name = ""
 if 'role_title' not in st.session_state: st.session_state.role_title = ""
 if 'generated_content' not in st.session_state: st.session_state.generated_content = None
+if 'selected_theme' not in st.session_state: st.session_state.selected_theme = "Classic Professional" # New session state for theme
 
 # --- Page Configuration ---
 st.set_page_config(page_title="Resume Agent", page_icon="🤖", layout="wide")
@@ -44,6 +45,14 @@ st.session_state.doc_type = st.sidebar.selectbox(
     "Select Document Type", 
     ("Resume", "KSC Response", "Cover Letter"), 
     key="doc_type_key"
+)
+
+# --- PDF Theme Selection ---
+st.sidebar.selectbox(
+    "Select PDF Theme",
+    ("Classic Professional", "Modern Minimalist"),
+    key="selected_theme"
+    # The value will be directly stored in st.session_state.selected_theme due to the key
 )
 
 st.sidebar.subheader("Job Details")
@@ -104,7 +113,8 @@ if st.sidebar.button("✨ Generate Document", type="primary", use_container_widt
                 st.session_state.generated_content = {
                     "html": markdown_content,
                     "docx": doc_generator._create_docx_from_markdown(markdown_content),
-                    "pdf": doc_generator._create_pdf_from_markdown(markdown_content)
+                    # Pass the selected theme to the PDF generator
+                    "pdf": doc_generator._create_pdf_from_markdown(markdown_content, theme_name=st.session_state.selected_theme)
                 }
             else:
                 st.session_state.generated_content = None
