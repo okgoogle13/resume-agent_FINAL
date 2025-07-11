@@ -55,12 +55,31 @@ def initialize_db():
                 url TEXT UNIQUE NOT NULL,
                 company_name TEXT,
                 role_title TEXT,
-                full_text TEXT,
-                summary_json TEXT,
-                status TEXT NOT NULL,
-                saved_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                full_text TEXT, # Scraped full text of the job ad by the user
+                summary_json TEXT, # AI summary of the job ad
+                status TEXT NOT NULL, # e.g., 'Saved', 'Scraped', 'Summarized', 'Applied'
+                saved_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                applied_at TIMESTAMP, # New field: Date of application
+                jd_text_for_application TEXT, # New field: JD text used at time of application
+                generated_resume_path TEXT, # New field
+                generated_cover_letter_path TEXT, # New field
+                generated_ksc_path TEXT # New field
             )
         """)
+        # Ensure new columns are added if the table already exists (for existing databases)
+        # This is a simple way; more robust migration would check columns individually.
+        try:
+            cursor.execute("ALTER TABLE saved_jobs ADD COLUMN applied_at TIMESTAMP;")
+            cursor.execute("ALTER TABLE saved_jobs ADD COLUMN jd_text_for_application TEXT;")
+            cursor.execute("ALTER TABLE saved_jobs ADD COLUMN generated_resume_path TEXT;")
+            cursor.execute("ALTER TABLE saved_jobs ADD COLUMN generated_cover_letter_path TEXT;")
+            cursor.execute("ALTER TABLE saved_jobs ADD COLUMN generated_ksc_path TEXT;")
+            conn.commit()
+        except sqlite3.OperationalError as e:
+            if "duplicate column name" in str(e):
+                pass # Columns already exist, that's fine
+            else:
+                raise # Other operational error
         conn.commit()
 
 # --- Career History Functions ---
@@ -151,3 +170,75 @@ def delete_job(job_id: int):
     with get_db_connection() as conn:
         conn.execute("DELETE FROM saved_jobs WHERE id = ?", (job_id,))
         conn.commit()
+
+def log_application_to_job(
+    url: str,
+    job_description_text: str,
+    company_name: Optional[str] = None,
+    role_title: Optional[str] = None,
+    generated_doc_paths: Optional[Dict[str, str]] = None
+) -> Optional[int]:
+    """
+    Logs an application attempt for a given job URL.
+    If the job URL doesn't exist, it creates a new record.
+    If it exists, it updates the record with application details.
+    Returns the ID of the job record.
+    """
+    if generated_doc_paths is None:
+        generated_doc_paths = {}
+
+    application_time = sqlite3.Timestamp.now() # Use sqlite3.Timestamp for SQLite datetime functions
+
+    with get_db_connection() as conn:
+        cursor = conn.cursor()
+        # Check if job exists
+        cursor.execute("SELECT id FROM saved_jobs WHERE url = ?", (url,))
+        job_row = cursor.fetchone()
+
+        if job_row: # Job exists, update it
+            job_id = job_row['id']
+            cursor.execute("""
+                UPDATE saved_jobs
+                SET company_name = COALESCE(?, company_name),
+                    role_title = COALESCE(?, role_title),
+                    status = 'Applied',
+                    applied_at = ?,
+                    jd_text_for_application = ?,
+                    generated_resume_path = ?,
+                    generated_cover_letter_path = ?,
+                    generated_ksc_path = ?
+                WHERE id = ?
+            """, (
+                company_name, role_title, application_time, job_description_text,
+                generated_doc_paths.get('resume'),
+                generated_doc_paths.get('cover_letter'),
+                generated_doc_paths.get('ksc'),
+                job_id
+            ))
+            conn.commit()
+            return job_id
+        else: # Job doesn't exist, create it
+            try:
+                cursor.execute("""
+                    INSERT INTO saved_jobs (
+                        url, company_name, role_title, status, saved_at,
+                        applied_at, jd_text_for_application,
+                        generated_resume_path, generated_cover_letter_path, generated_ksc_path
+                    ) VALUES (?, ?, ?, 'Applied', ?, ?, ?, ?, ?, ?)
+                """, (
+                    url, company_name, role_title, application_time, # saved_at = applied_at for new entry
+                    application_time, job_description_text,
+                    generated_doc_paths.get('resume'),
+                    generated_doc_paths.get('cover_letter'),
+                    generated_doc_paths.get('ksc')
+                ))
+                conn.commit()
+                return cursor.lastrowid
+            except sqlite3.IntegrityError: # Should not happen if previous check was done, but as a safeguard
+                # This implies a race condition or logic error if reached.
+                # Try to fetch the ID again if it was inserted by another process.
+                cursor.execute("SELECT id FROM saved_jobs WHERE url = ?", (url,))
+                job_row_after_integrity_error = cursor.fetchone()
+                if job_row_after_integrity_error:
+                    return job_row_after_integrity_error['id']
+                return None # Failed to insert or find

@@ -5,7 +5,17 @@ def main():
     st.title("AI Resume Builder")
 
     st.header("1. Input Job Details")
-    job_description = st.text_area("Paste the full Job Description here:", height=200, key="job_description")
+    job_url_input = st.text_input("Enter Job Posting URL:", key="job_url_input", placeholder="https://example.com/job-listing/123")
+    # We'll need a variable to hold the actual job description text, whether from URL or manual fallback (later)
+    # For now, the tailoring functions expect job_description_text.
+    # This will be populated by the web scraping logic later in this phase.
+    # We also need to handle the case where job_url_input is used directly by the button logic.
+
+from web_scraper import fetch_page_content, extract_job_description_from_html
+from database import initialize_db, log_application_to_job # Import database functions
+
+# Initialize database (ensure table exists)
+initialize_db()
 
     st.header("2. Upload Your Base Documents")
     base_resume = st.file_uploader(
@@ -102,12 +112,48 @@ def generate_tailored_ksc(job_description_text: str, base_ksc_text: str) -> str:
 
     st.header("3. Generate Tailored Documents")
     if st.button("Generate Tailored Documents", key="generate_button"):
-        if not job_description:
-            st.error("Please paste the Job Description above.")
+        # In this phase, job_description_text will be populated by web scraping.
+        # For now, the error check is on job_url_input.
+        # The actual text will be passed to tailoring functions later.
+        job_description_text_for_tailoring = "" # This will be filled by scraper output
+
+        if not job_url_input: # Check if URL is provided
+            st.error("Please enter the Job Posting URL above.")
         elif not base_resume:
             st.error("Please upload your Base Resume.")
         else:
-            with st.spinner("Processing documents... Please wait."):
+            # Web scraping logic will go here in the next step.
+            # For now, we'll use a placeholder for job_description_text_for_tailoring
+            # to allow the rest of the flow to be connected.
+            # In a real scenario, if scraping fails, we might ask for manual input.
+
+            # Placeholder: Simulate that job_url_input itself is the JD for now,
+            # or that scraping will happen and populate job_description_text_for_tailoring.
+            # This will be replaced by actual scraped content.
+            # job_description_text_for_tailoring = f"Job Description from URL: {job_url_input} (Actual scraping pending)" # Placeholder
+
+            with st.spinner("Fetching and processing job description from URL..."):
+                html_content = fetch_page_content(job_url_input)
+                if html_content:
+                    job_description_text_for_tailoring = extract_job_description_from_html(html_content, job_url_input)
+                    if "[Could not automatically extract detailed job description" in job_description_text_for_tailoring or not job_description_text_for_tailoring.strip():
+                        st.warning(f"Could not extract a detailed job description from the URL. The AI will proceed with the information available (which might be limited or just a placeholder). For best results, you might need to find a more direct link or ensure the page content is accessible. The message from scraper was: {job_description_text_for_tailoring}")
+                        # Provide a way to see what was (or wasn't) scraped.
+                        st.expander("View Scraped Content (or error message)").write(job_description_text_for_tailoring)
+                        # Fallback to a generic message if scraping truly yields nothing usable by AI.
+                        if not job_description_text_for_tailoring.strip() or "[Could not automatically extract detailed job description" in job_description_text_for_tailoring :
+                             job_description_text_for_tailoring = f"No detailed job description could be extracted from URL: {job_url_input}. Proceeding with minimal information."
+
+                else:
+                    st.error(f"Failed to fetch content from the URL: {job_url_input}. Please check the URL or your network connection.")
+                    st.stop() # Stop further processing if URL fetch fails
+
+            if not job_description_text_for_tailoring.strip():
+                 st.error("Job description could not be obtained from the URL. Cannot proceed.")
+                 st.stop()
+
+
+            with st.spinner("Tailoring documents... Please wait."):
                 # Extract text from uploaded files
                 base_resume_text = extract_text_from_file(base_resume)
                 base_cover_letter_text = extract_text_from_file(base_cover_letter) if base_cover_letter else ""
@@ -145,6 +191,24 @@ def generate_tailored_ksc(job_description_text: str, base_ksc_text: str) -> str:
                     mime="text/plain"
                 )
                 st.success("Documents generated successfully!")
+
+                # Log application to database
+                # For Phase 2, actual paths to saved docs are not implemented yet.
+                # Company name and job title extraction from JD is also a future step.
+                # We'll log the URL and the scraped JD text.
+                logged_app_id = log_application_to_job(
+                    url=job_url_input,
+                    job_description_text=job_description_text_for_tailoring,
+                    company_name=None, # Placeholder for now
+                    role_title=None,   # Placeholder for now
+                    generated_doc_paths={} # Placeholder for now
+                )
+                if logged_app_id:
+                    st.info(f"Application attempt for {job_url_input} logged to database (ID: {logged_app_id}).")
+                else:
+                    # Error/warning for logging failure is handled within log_application_to_job via st.warning/st.error
+                    pass
+
 
 if __name__ == "__main__":
     main()
