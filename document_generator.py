@@ -17,12 +17,21 @@ import json
 embedding_model = SentenceTransformer('all-MiniLM-L6-v2')
 
 def find_relevant_experiences(question: str, experiences: List[Dict[str, Any]], top_k: int = 3) -> List[Dict[str, Any]]:
+    """Finds the most relevant career experiences based on a query string."""
     if not experiences: return []
+    # Create a single text representation for each experience
     experience_texts = [f"{exp['title']}. {exp['situation']} {exp['task']} {exp['action']} {exp['result']}" for exp in experiences]
+    
+    # Generate embeddings
     question_embedding = embedding_model.encode([question])
     experience_embeddings = embedding_model.encode(experience_texts)
+    
+    # Calculate cosine similarity
     similarities = cosine_similarity(question_embedding, experience_embeddings)[0]
+    
+    # Get the indices of the top-k most similar experiences
     top_indices = similarities.argsort()[-top_k:][::-1]
+    
     return [experiences[i] for i in top_indices]
 
 class DocumentGenerator:
@@ -30,6 +39,7 @@ class DocumentGenerator:
         self.gemini_client = gemini_client
 
     def _generate_ai_content(self, prompt: str) -> str:
+        """Helper function to call the Gemini API."""
         return self.gemini_client.generate_text(prompt)
 
     def _create_docx_from_markdown(self, markdown_content: str) -> bytes:
@@ -49,6 +59,7 @@ class DocumentGenerator:
             elif line:
                 doc.add_paragraph(line)
         
+        # Save document to a byte stream
         bio = io.BytesIO()
         doc.save(bio)
         return bio.getvalue()
@@ -68,12 +79,15 @@ class DocumentGenerator:
         return HTML(string=html_content).write_pdf(stylesheets=[css])
 
     def generate_resume_markdown(self, user_profile: Dict, experiences: List[Dict[str, Any]]) -> str:
+        """Generates the resume content as a Markdown string."""
         md_parts = [f"# {user_profile.get('full_name', 'Your Name')}"]
         contact_info = " | ".join(filter(None, [user_profile.get('phone'), user_profile.get('email'), user_profile.get('address'), user_profile.get('linkedin_url')]))
         md_parts.append(contact_info)
+        
         if user_profile.get('professional_summary'):
             md_parts.append("\n## PROFESSIONAL SUMMARY")
             md_parts.append(f"{user_profile.get('professional_summary')}")
+        s
         if experiences:
             md_parts.append("\n## PROFESSIONAL EXPERIENCE")
             for exp in experiences:
@@ -82,12 +96,15 @@ class DocumentGenerator:
                 bullets = exp.get('resume_bullets', '').split('\n')
                 for bullet in bullets:
                     if bullet.strip(): md_parts.append(f"- {bullet.strip()}")
-        markdown_content = "\n".join(md_parts)
-        return {"html": markdown_content, "docx": self._create_docx_from_markdown(markdown_content), "pdf": self._create_pdf_from_markdown(markdown_content)}
+        
+        # Return only the markdown string
+        return "\n".join(md_parts)
 
     def generate_ksc_response(self, ksc_question: str, user_profile: Dict, experiences: List[Dict[str, Any]], company_intel: Dict[str, str], role_title: str) -> Dict[str, Any]:
+        """Generates a KSC response and returns a dictionary with content."""
         relevant_experiences = find_relevant_experiences(ksc_question, experiences)
         experience_text = "\n\n".join([f"Title: {exp['title']}\nSituation: {exp['situation']}\nTask: {exp['task']}\nAction: {exp['action']}\nResult: {exp['result']}" for exp in relevant_experiences])
+        
         prompt = f"""
         **Persona:** You are an expert career coach for the Australian Community Services sector. Your tone is professional and authentic, mirroring the user's personal style if provided.
         **User's Personal Style Profile:** {user_profile.get('style_profile', 'N/A')}
@@ -105,14 +122,17 @@ class DocumentGenerator:
         **Output Format:** Generate clean Markdown.
         """
         markdown_content = self._generate_ai_content(prompt)
-        return {"html": markdown_content, "docx": self._create_docx_from_markdown(markdown_content), "pdf": self._create_pdf_from_markdown(markdown_content)}
+        # This function returns a dict, which is handled in main_app.py
+        return {"html": markdown_content}
 
     def generate_cover_letter_markdown(self, user_profile: Dict, experiences: List[Dict[str, Any]], job_details: Dict[str, Any], company_intel: Dict[str, Any]) -> str:
+        """Generates a cover letter as a Markdown string."""
         most_relevant_experience = find_relevant_experiences(job_details.get('full_text', ''), experiences, top_k=1)
         experience_snippet = ""
         if most_relevant_experience:
             exp = most_relevant_experience[0]
             experience_snippet = f"In my role as a {exp['title']} at {exp['company']}, I was responsible for {exp['task']}. I successfully {exp['action']}, which resulted in {exp['result']}."
+        
         prompt = f"""
         **Persona:** You are an expert career advisor, writing a cover letter for the Australian Community Services sector. Your tone is professional and warm, mirroring the user's personal style if provided.
         **User's Personal Style Profile:** {user_profile.get('style_profile', 'N/A')}
@@ -128,8 +148,8 @@ class DocumentGenerator:
         ---
         **Output Format:** Generate clean Markdown.
         """
-        markdown_content = self._generate_ai_content(prompt)
-        return {"html": markdown_content, "docx": self._create_docx_from_markdown(markdown_content), "pdf": self._create_pdf_from_markdown(markdown_content)}
+        # Return only the markdown string
+        return self._generate_ai_content(prompt)
 
     def score_resume(self, resume_text: str, job_description: str) -> Dict[str, Any]:
         """Scores a resume against a job description using AI."""
@@ -162,6 +182,7 @@ class DocumentGenerator:
         """
         response_text = self._generate_ai_content(prompt)
         try:
+            # Clean up potential markdown formatting around the JSON
             json_str = response_text.strip().replace("```json", "").replace("```", "")
             return json.loads(json_str)
         except json.JSONDecodeError:
