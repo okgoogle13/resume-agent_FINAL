@@ -2,8 +2,8 @@
 """
 A fully functional module to scrape job description content from a given URL.
 It uses Playwright for robust browser automation and BeautifulSoup for HTML parsing.
+This version is refactored to use Playwright's synchronous API for simplicity.
 """
-import asyncio
 import logging
 from playwright.sync_api import sync_playwright
 from bs4 import BeautifulSoup
@@ -19,7 +19,7 @@ class PDScraperModule:
         self.timeout = timeout
 
     def _get_page_content(self, url: str) -> str:
-        """Uses Playwright to navigate to a URL and return its HTML content."""
+        """Uses Playwright's sync API to navigate to a URL and return its HTML content."""
         try:
             with sync_playwright() as p:
                 browser = p.chromium.launch()
@@ -43,8 +43,8 @@ class PDScraperModule:
         for script_or_style in soup(["script", "style"]):
             script_or_style.decompose()
         
-        # Prioritize common content tags
-        for tag in ['main', 'article', '[role="main"]']:
+        # Prioritize common content tags for better accuracy
+        for tag in ['main', 'article', '[role="main"]', 'body']:
             if soup.select_one(tag):
                 soup = soup.select_one(tag)
                 break
@@ -77,6 +77,7 @@ class PDScraperModule:
         """
         try:
             response = self.gemini_client.generate_text(prompt)
+            # Clean up potential markdown formatting around the JSON
             json_str = response.strip().replace("```json", "").replace("```", "")
             return json.loads(json_str)
         except (json.JSONDecodeError, Exception) as e:
