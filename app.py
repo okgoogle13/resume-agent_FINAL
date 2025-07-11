@@ -33,15 +33,37 @@ def extract_text_from_file(uploaded_file_object):
     For Phase 1, this will be very basic and might assume TXT or just return a filename.
     Proper PDF/DOCX parsing will be added later.
     """
-    if uploaded_file_object is not None:
-        # For now, let's assume .txt and read it directly for simplicity in Phase 1
-        # or return a string indicating the file name for other types.
-        if uploaded_file_object.type == "text/plain":
+    if uploaded_file_object is None:
+        return ""
+
+    try:
+        file_type = uploaded_file_object.type
+        file_name = uploaded_file_object.name
+
+        if file_type == "text/plain":
             return uploaded_file_object.getvalue().decode("utf-8")
+        elif file_type == "application/pdf":
+            import pypdf
+            pdf_reader = pypdf.PdfReader(uploaded_file_object)
+            text = ""
+            for page_num in range(len(pdf_reader.pages)):
+                page = pdf_reader.pages[page_num]
+                text += page.extract_text() or "" # Add null check for empty pages
+            if not text.strip(): # Check if extracted text is empty or just whitespace
+                 return f"[Could not extract text from PDF: {file_name} - The document might be image-based or empty.]"
+            return text
+        elif file_type == "application/vnd.openxmlformats-officedocument.wordprocessingml.document":
+            import docx
+            document = docx.Document(uploaded_file_object)
+            text = "\n".join([para.text for para in document.paragraphs])
+            if not text.strip(): # Check if extracted text is empty or just whitespace
+                return f"[Could not extract text from DOCX: {file_name} - The document might be empty or structured in a way that text isn't in paragraphs (e.g. tables only).]"
+            return text
         else:
-            # In a real scenario, you'd use libraries like PyPDF2, python-docx
-            return f"[Text from {uploaded_file_object.name} - full parsing for {uploaded_file_object.type} pending]"
-    return ""
+            return f"[Unsupported file type: {file_type} for file: {file_name} - Cannot extract text.]"
+    except Exception as e:
+        st.error(f"Error processing file {uploaded_file_object.name}: {e}")
+        return f"[Error extracting text from {uploaded_file_object.name}: {str(e)}]"
 
 def generate_tailored_resume(job_description_text: str, base_resume_text: str) -> str:
     """Placeholder for AI-driven resume tailoring."""
