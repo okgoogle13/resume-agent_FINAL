@@ -1,13 +1,13 @@
 #!/bin/bash
-# Setup script for the Resume Agent 2.0 (Final & Fully Functional)
-# This script creates the full, corrected project structure and files.
+# Setup script for the Resume Agent (Refactored & Enhanced)
+# This script creates the full, corrected project structure and all source files.
 
-echo "Setting up corrected project structure..."
+echo "Setting up project structure..."
 mkdir -p pages
 
-echo "Creating corrected project files..."
+echo "Creating project files..."
 
-# --- requirements.txt ---
+# --- requirements.txt (Optimized) ---
 cat <<'EOF' > requirements.txt
 # Core dependencies
 streamlit
@@ -27,19 +27,18 @@ playwright
 beautifulsoup4
 sentence-transformers
 scikit-learn
-torch
-torchvision
 
 # Utilities
 python-dotenv
 EOF
 
-# --- database.py ---
+# --- database.py (Refactored with Context Managers) ---
 cat <<'EOF' > database.py
 # database.py
 """
 Handles all database operations for the user's career history, profile, and saved jobs.
 Uses SQLite for simple, local, file-based storage.
+This version is refactored to use context managers for safer database connections.
 """
 import sqlite3
 from typing import List, Dict, Any, Optional
@@ -55,104 +54,139 @@ def get_db_connection():
 
 def initialize_db():
     """Creates the necessary tables if they don't exist."""
-    conn = get_db_connection()
-    cursor = conn.cursor()
-    # Career History Table
-    cursor.execute("""
-        CREATE TABLE IF NOT EXISTS career_history (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            title TEXT NOT NULL,
-            company TEXT,
-            dates TEXT,
-            situation TEXT NOT NULL,
-            task TEXT NOT NULL,
-            action TEXT NOT NULL,
-            result TEXT NOT NULL,
-            related_skills TEXT,
-            resume_bullets TEXT
-        )
-    """)
-    # User Profile Table
-    cursor.execute("""
-        CREATE TABLE IF NOT EXISTS user_profile (
-            id INTEGER PRIMARY KEY CHECK (id = 1),
-            full_name TEXT,
-            email TEXT,
-            phone TEXT,
-            address TEXT,
-            linkedin_url TEXT,
-            professional_summary TEXT,
-            style_profile TEXT
-        )
-    """)
-    # Saved Jobs Table
-    cursor.execute("""
-        CREATE TABLE IF NOT EXISTS saved_jobs (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            url TEXT UNIQUE NOT NULL,
-            company_name TEXT,
-            role_title TEXT,
-            full_text TEXT,
-            summary_json TEXT,
-            status TEXT NOT NULL,
-            saved_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-        )
-    """)
-    conn.commit()
-    conn.close()
+    with get_db_connection() as conn:
+        cursor = conn.cursor()
+        # Career History Table
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS career_history (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                title TEXT NOT NULL,
+                company TEXT,
+                dates TEXT,
+                situation TEXT NOT NULL,
+                task TEXT NOT NULL,
+                action TEXT NOT NULL,
+                result TEXT NOT NULL,
+                related_skills TEXT,
+                resume_bullets TEXT
+            )
+        """)
+        # User Profile Table
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS user_profile (
+                id INTEGER PRIMARY KEY CHECK (id = 1),
+                full_name TEXT,
+                email TEXT,
+                phone TEXT,
+                address TEXT,
+                linkedin_url TEXT,
+                professional_summary TEXT,
+                style_profile TEXT
+            )
+        """)
+        # Saved Jobs Table
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS saved_jobs (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                url TEXT UNIQUE NOT NULL,
+                company_name TEXT,
+                role_title TEXT,
+                full_text TEXT,
+                summary_json TEXT,
+                status TEXT NOT NULL,
+                saved_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
+        conn.commit()
 
+# --- Career History Functions ---
 def add_experience(title: str, company: str, dates: str, situation: str, task: str, action: str, result: str, skills: str, bullets: str):
-    conn = get_db_connection(); cursor = conn.cursor()
-    cursor.execute("INSERT INTO career_history (title, company, dates, situation, task, action, result, related_skills, resume_bullets) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)", (title, company, dates, situation, task, action, result, skills, bullets))
-    conn.commit(); conn.close()
+    """Adds a new career experience to the database."""
+    with get_db_connection() as conn:
+        conn.execute("INSERT INTO career_history (title, company, dates, situation, task, action, result, related_skills, resume_bullets) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)", (title, company, dates, situation, task, action, result, skills, bullets))
+        conn.commit()
+
 def get_all_experiences() -> List[Dict[str, Any]]:
-    conn = get_db_connection(); cursor = conn.cursor()
-    cursor.execute("SELECT * FROM career_history ORDER BY id DESC")
-    experiences = [dict(row) for row in cursor.fetchall()]; conn.close(); return experiences
+    """Retrieves all career experiences from the database."""
+    with get_db_connection() as conn:
+        cursor = conn.execute("SELECT * FROM career_history ORDER BY id DESC")
+        return [dict(row) for row in cursor.fetchall()]
+
 def get_experience_by_id(exp_id: int) -> Optional[Dict[str, Any]]:
-    conn = get_db_connection(); cursor = conn.cursor()
-    cursor.execute("SELECT * FROM career_history WHERE id = ?", (exp_id,)); experience = cursor.fetchone(); conn.close(); return dict(experience) if experience else None
+    """Retrieves a single career experience by its ID."""
+    with get_db_connection() as conn:
+        cursor = conn.execute("SELECT * FROM career_history WHERE id = ?", (exp_id,))
+        experience = cursor.fetchone()
+        return dict(experience) if experience else None
+
 def update_experience(exp_id: int, title: str, company: str, dates: str, situation: str, task: str, action: str, result: str, skills: str, bullets: str):
-    conn = get_db_connection(); cursor = conn.cursor()
-    cursor.execute("UPDATE career_history SET title = ?, company = ?, dates = ?, situation = ?, task = ?, action = ?, result = ?, related_skills = ?, resume_bullets = ? WHERE id = ?", (title, company, dates, situation, task, action, result, skills, bullets, exp_id))
-    conn.commit(); conn.close()
+    """Updates an existing career experience in the database."""
+    with get_db_connection() as conn:
+        conn.execute("UPDATE career_history SET title = ?, company = ?, dates = ?, situation = ?, task = ?, action = ?, result = ?, related_skills = ?, resume_bullets = ? WHERE id = ?", (title, company, dates, situation, task, action, result, skills, bullets, exp_id))
+        conn.commit()
+
 def delete_experience(exp_id: int):
-    conn = get_db_connection(); cursor = conn.cursor()
-    cursor.execute("DELETE FROM career_history WHERE id = ?", (exp_id,)); conn.commit(); conn.close()
+    """Deletes a career experience from the database."""
+    with get_db_connection() as conn:
+        conn.execute("DELETE FROM career_history WHERE id = ?", (exp_id,))
+        conn.commit()
 
+# --- User Profile Functions ---
 def save_user_profile(profile_data: Dict[str, str]):
-    conn = get_db_connection(); cursor = conn.cursor()
-    cursor.execute("INSERT OR REPLACE INTO user_profile (id, full_name, email, phone, address, linkedin_url, professional_summary, style_profile) VALUES (1, ?, ?, ?, ?, ?, ?, ?)", (profile_data.get('full_name'), profile_data.get('email'), profile_data.get('phone'), profile_data.get('address'), profile_data.get('linkedin_url'), profile_data.get('professional_summary'), profile_data.get('style_profile')))
-    conn.commit(); conn.close()
-def get_user_profile() -> Optional[Dict[str, Any]]:
-    conn = get_db_connection(); cursor = conn.cursor()
-    cursor.execute("SELECT * FROM user_profile WHERE id = 1"); profile = cursor.fetchone(); conn.close(); return dict(profile) if profile else None
-def save_style_profile(style_profile_text: str):
-    conn = get_db_connection(); cursor = conn.cursor()
-    cursor.execute("INSERT OR IGNORE INTO user_profile (id) VALUES (1)")
-    cursor.execute("UPDATE user_profile SET style_profile = ? WHERE id = 1", (style_profile_text,))
-    conn.commit(); conn.close()
+    """Saves or updates the user's profile."""
+    with get_db_connection() as conn:
+        conn.execute("INSERT OR REPLACE INTO user_profile (id, full_name, email, phone, address, linkedin_url, professional_summary, style_profile) VALUES (1, ?, ?, ?, ?, ?, ?, ?)", (profile_data.get('full_name'), profile_data.get('email'), profile_data.get('phone'), profile_data.get('address'), profile_data.get('linkedin_url'), profile_data.get('professional_summary'), profile_data.get('style_profile')))
+        conn.commit()
 
+def get_user_profile() -> Optional[Dict[str, Any]]:
+    """Retrieves the user's profile."""
+    with get_db_connection() as conn:
+        cursor = conn.execute("SELECT * FROM user_profile WHERE id = 1")
+        profile = cursor.fetchone()
+        return dict(profile) if profile else None
+
+def save_style_profile(style_profile_text: str):
+    """Saves the user's writing style profile."""
+    with get_db_connection() as conn:
+        conn.execute("INSERT OR IGNORE INTO user_profile (id) VALUES (1)")
+        conn.execute("UPDATE user_profile SET style_profile = ? WHERE id = 1", (style_profile_text,))
+        conn.commit()
+
+# --- Saved Jobs Functions ---
 def add_job(url: str) -> Optional[int]:
-    conn = get_db_connection(); cursor = conn.cursor()
-    try:
-        cursor.execute("INSERT INTO saved_jobs (url, status) VALUES (?, 'Saved')", (url,)); conn.commit(); job_id = cursor.lastrowid
-    except sqlite3.IntegrityError: job_id = None
-    finally: conn.close()
-    return job_id
+    """Adds a new job by URL, ensuring it's unique."""
+    with get_db_connection() as conn:
+        try:
+            cursor = conn.execute("INSERT INTO saved_jobs (url, status) VALUES (?, 'Saved')", (url,))
+            conn.commit()
+            return cursor.lastrowid
+        except sqlite3.IntegrityError:
+            return None # Job with this URL already exists
+
 def update_job_scrape_data(job_id: int, full_text: str):
-    conn = get_db_connection(); cursor = conn.cursor()
-    cursor.execute("UPDATE saved_jobs SET full_text = ?, status = 'Scraped' WHERE id = ?", (full_text, job_id)); conn.commit(); conn.close()
+    """Updates a job record with the scraped text content."""
+    with get_db_connection() as conn:
+        conn.execute("UPDATE saved_jobs SET full_text = ?, status = 'Scraped' WHERE id = ?", (full_text, job_id))
+        conn.commit()
+
 def update_job_summary(job_id: int, summary: Dict, company_name: str, role_title: str):
-    conn = get_db_connection(); cursor = conn.cursor(); summary_text = json.dumps(summary)
-    cursor.execute("UPDATE saved_jobs SET summary_json = ?, company_name = ?, role_title = ?, status = 'Summarized' WHERE id = ?", (summary_text, company_name, role_title, job_id))
-    conn.commit(); conn.close()
+    """Updates a job record with the AI-generated summary."""
+    summary_text = json.dumps(summary)
+    with get_db_connection() as conn:
+        conn.execute("UPDATE saved_jobs SET summary_json = ?, company_name = ?, role_title = ?, status = 'Summarized' WHERE id = ?", (summary_text, company_name, role_title, job_id))
+        conn.commit()
+
 def get_all_saved_jobs() -> List[Dict[str, Any]]:
-    conn = get_db_connection(); cursor = conn.cursor()
-    cursor.execute("SELECT * FROM saved_jobs ORDER BY saved_at DESC"); jobs = [dict(row) for row in cursor.fetchall()]; conn.close(); return jobs
+    """Retrieves all saved jobs from the database."""
+    with get_db_connection() as conn:
+        cursor = conn.execute("SELECT * FROM saved_jobs ORDER BY saved_at DESC")
+        return [dict(row) for row in cursor.fetchall()]
+
 def delete_job(job_id: int):
-    conn = get_db_connection(); cursor = conn.cursor()
-    cursor.execute("DELETE FROM saved_jobs WHERE id = ?", (job_id,)); conn.commit(); conn.close()
+    """Deletes a saved job from the database."""
+    with get_db_connection() as conn:
+        conn.execute("DELETE FROM saved_jobs WHERE id = ?", (job_id,))
+        conn.commit()
 EOF
 
 # --- api_clients.py ---
@@ -166,7 +200,6 @@ import google.generativeai as genai
 import httpx
 from typing import Optional, Dict, Any
 from tenacity import retry, stop_after_attempt, wait_exponential
-import json
 
 class GeminiClient:
     """Client for interacting with the Google Gemini API."""
@@ -242,7 +275,7 @@ class IntelligenceBoosterModule:
     def __init__(self, perplexity_client: PerplexityClient):
         self.client = perplexity_client
         self.query_generator = QueryGenerator()
-        self.cache = TTLCache(maxsize=100, ttl=86400)
+        self.cache = TTLCache(maxsize=100, ttl=86400) # Cache for 24 hours
 
     def get_intelligence(self, company_name: str, role_title: str) -> Dict[str, str]:
         """Main method to fetch and structure company intelligence."""
@@ -281,21 +314,24 @@ def parse_files(uploaded_files: List[st.runtime.uploaded_file_manager.UploadedFi
     """Parses a list of uploaded files and returns their combined text content."""
     full_text = []
     for file in uploaded_files:
-        if file.type == "application/pdf":
-            text = parse_pdf(file)
-        elif file.type == "application/vnd.openxmlformats-officedocument.wordprocessingml.document":
-            text = parse_docx(file)
-        elif file.type == "text/plain":
-            text = file.getvalue().decode("utf-8")
-        else:
-            text = f"Unsupported file type: {file.name}"
-        full_text.append(f"--- Document: {file.name} ---\n{text}\n\n")
+        try:
+            if file.type == "application/pdf":
+                text = parse_pdf(io.BytesIO(file.getvalue()))
+            elif file.type == "application/vnd.openxmlformats-officedocument.wordprocessingml.document":
+                text = parse_docx(io.BytesIO(file.getvalue()))
+            elif file.type == "text/plain":
+                text = file.getvalue().decode("utf-8")
+            else:
+                text = f"\n--- Unsupported file type: {file.name} ---\n"
+            full_text.append(f"--- Document: {file.name} ---\n{text}\n\n")
+        except Exception as e:
+            st.error(f"Could not parse file {file.name}: {e}")
     return "".join(full_text)
 
-def parse_pdf(file: io.BytesIO) -> str:
-    """Extracts text from an uploaded PDF file."""
+def parse_pdf(file_bytes: io.BytesIO) -> str:
+    """Extracts text from a PDF file in bytes."""
     try:
-        pdf_reader = PdfReader(file)
+        pdf_reader = PdfReader(file_bytes)
         text = ""
         for page in pdf_reader.pages:
             text += page.extract_text() or ""
@@ -303,49 +339,50 @@ def parse_pdf(file: io.BytesIO) -> str:
     except Exception as e:
         return f"Error parsing PDF: {e}"
 
-def parse_docx(file: io.BytesIO) -> str:
-    """Extracts text from an uploaded DOCX file."""
+def parse_docx(file_bytes: io.BytesIO) -> str:
+    """Extracts text from a DOCX file in bytes."""
     try:
-        doc = Document(file)
+        doc = Document(file_bytes)
         text = "\n".join([para.text for para in doc.paragraphs])
         return text
     except Exception as e:
         return f"Error parsing DOCX: {e}"
 EOF
 
-# --- pd_scraper.py (FULLY FUNCTIONAL) ---
+# --- pd_scraper.py (Simplified with Sync API) ---
 cat <<'EOF' > pd_scraper.py
 # pd_scraper.py
 """
 A fully functional module to scrape job description content from a given URL.
 It uses Playwright for robust browser automation and BeautifulSoup for HTML parsing.
+This version is refactored to use Playwright's synchronous API for simplicity.
 """
-import asyncio
-from playwright.async_api import async_playwright
+import logging
+from playwright.sync_api import sync_playwright
 from bs4 import BeautifulSoup
 from api_clients import GeminiClient
 import json
 
+logger = logging.getLogger(__name__)
+
 class PDScraperModule:
-    def __init__(self, gemini_client: GeminiClient):
+    def __init__(self, gemini_client: GeminiClient, timeout: int = 15000):
         """Initializes the scraper module and the Gemini client."""
         self.gemini_client = gemini_client
+        self.timeout = timeout
 
-    async def _get_page_content(self, url: str) -> str:
-        """
-        Uses Playwright to navigate to a URL and return its HTML content.
-        This can handle dynamically loaded content (JavaScript).
-        """
+    def _get_page_content(self, url: str) -> str:
+        """Uses Playwright's sync API to navigate to a URL and return its HTML content."""
         try:
-            async with async_playwright() as p:
-                browser = await p.chromium.launch()
-                page = await browser.new_page()
-                await page.goto(url, wait_until="networkidle", timeout=15000)
-                content = await page.content()
-                await browser.close()
+            with sync_playwright() as p:
+                browser = p.chromium.launch()
+                page = browser.new_page()
+                page.goto(url, wait_until="networkidle", timeout=self.timeout)
+                content = page.content()
+                browser.close()
                 return content
         except Exception as e:
-            print(f"Error with Playwright navigation: {e}")
+            logger.error(f"Error with Playwright navigation for {url}: {e}")
             return f"<html><body>Error fetching page: {e}</body></html>"
 
     def _extract_text_from_html(self, html: str) -> str:
@@ -355,14 +392,17 @@ class PDScraperModule:
         """
         soup = BeautifulSoup(html, 'html.parser')
         
+        # Remove script and style elements
         for script_or_style in soup(["script", "style"]):
             script_or_style.decompose()
         
-        for tag in ['main', 'article', '[role="main"]']:
+        # Prioritize common content tags for better accuracy
+        for tag in ['main', 'article', '[role="main"]', 'body']:
             if soup.select_one(tag):
                 soup = soup.select_one(tag)
                 break
         
+        # Get text and clean it up
         text = soup.get_text(separator='\n', strip=True)
         lines = (line.strip() for line in text.splitlines())
         chunks = (phrase.strip() for line in lines for phrase in line.split("  "))
@@ -376,6 +416,7 @@ class PDScraperModule:
         **Job Description Text:**
         ---
         {text[:8000]} 
+        # Note: Text is truncated to 8000 characters to fit within prompt limits.
         ---
 
         **Output Format:**
@@ -389,56 +430,48 @@ class PDScraperModule:
         """
         try:
             response = self.gemini_client.generate_text(prompt)
+            # Clean up potential markdown formatting around the JSON
             json_str = response.strip().replace("```json", "").replace("```", "")
             return json.loads(json_str)
-        except Exception as e:
-            print(f"AI summarization failed: {e}")
+        except (json.JSONDecodeError, Exception) as e:
+            logger.error(f"AI summarization failed: {e}", exc_info=True)
             return {"error": f"AI summarization failed: {e}"}
 
     def process_url(self, url: str) -> dict:
-        """
-        Orchestrates the scraping and summarization process.
-        This is an async-to-sync wrapper.
-        """
+        """Orchestrates the scraping and summarization process."""
         try:
-            return asyncio.run(self._async_process_url(url))
-        except Exception as e:
-            return {"error": f"Failed to process URL: {e}"}
+            logger.info(f"Starting to scrape URL: {url}")
+            html_content = self._get_page_content(url)
 
-    async def _async_process_url(self, url: str) -> dict:
-        """The core async processing function."""
-        print(f"Starting to scrape URL: {url}")
-        html_content = await self._get_page_content(url)
-        
-        if "Error fetching page" in html_content:
-            return {"error": "Could not retrieve page content."}
-            
-        full_text = self._extract_text_from_html(html_content)
-        
-        if not full_text:
-            return {"error": "Could not extract any meaningful text from the URL."}
-            
-        result = {"full_text": full_text}
-        
-        print("Scraping complete. Summarizing with AI...")
-        summary = self._summarize_text_with_ai(full_text)
-        
-        result.update(summary)
-        print(f"Processing complete for {url}")
-        return result
+            if "Error fetching page" in html_content:
+                return {"error": "Could not retrieve page content."}
+
+            full_text = self._extract_text_from_html(html_content)
+
+            if not full_text:
+                return {"error": "Could not extract any meaningful text from the URL."}
+
+            result = {"full_text": full_text}
+            logger.info("Scraping complete. Summarizing with AI...")
+            summary = self._summarize_text_with_ai(full_text)
+            result.update(summary)
+            logger.info(f"Processing complete for {url}")
+            return result
+        except Exception as e:
+            logger.error(f"Failed to process URL {url}: {e}", exc_info=True)
+            return {"error": f"An unexpected error occurred during URL processing: {e}"}
 EOF
 
-# --- document_generator.py ---
+# --- document_generator.py (Polished) ---
 cat <<'EOF' > document_generator.py
 # document_generator.py
 """
 Handles the core logic of generating documents as structured Markdown text.
-This version includes improved export quality for DOCX and PDF.
+This version includes improved export quality for DOCX and PDF and minor bug fixes.
 """
 from api_clients import GeminiClient
 from typing import List, Dict, Any
 from docx import Document
-from docx.shared import Pt
 from weasyprint import HTML, CSS
 import io
 from sentence_transformers import SentenceTransformer
@@ -446,16 +479,27 @@ from sklearn.metrics.pairwise import cosine_similarity
 import markdown
 import json
 
+# Initialize the embedding model once when the module is loaded
 embedding_model = SentenceTransformer('all-MiniLM-L6-v2')
 
 def find_relevant_experiences(question: str, experiences: List[Dict[str, Any]], top_k: int = 3) -> List[Dict[str, Any]]:
     """Finds the most relevant career experiences based on a query string."""
-    if not experiences: return []
-    experience_texts = [f"{exp['title']}. {exp['situation']} {exp['task']} {exp['action']} {exp['result']}" for exp in experiences]
+    if not experiences or not question:
+        return []
+    
+    # Create a single text representation for each experience
+    experience_texts = [f"{exp.get('title', '')}. {exp.get('situation', '')} {exp.get('task', '')} {exp.get('action', '')} {exp.get('result', '')}" for exp in experiences]
+    
+    # Generate embeddings
     question_embedding = embedding_model.encode([question])
     experience_embeddings = embedding_model.encode(experience_texts)
+    
+    # Calculate cosine similarity
     similarities = cosine_similarity(question_embedding, experience_embeddings)[0]
+    
+    # Get the indices of the top-k most similar experiences
     top_indices = similarities.argsort()[-top_k:][::-1]
+    
     return [experiences[i] for i in top_indices]
 
 class DocumentGenerator:
@@ -479,24 +523,32 @@ class DocumentGenerator:
                 p = doc.add_paragraph()
                 p.add_run(line[4:]).bold = True
             elif line.startswith('- '):
-                doc.add_paragraph(line[2:], style='List Bullet')
+                # Add paragraph with bullet style, ensuring text is not empty
+                p_text = line[2:].strip()
+                if p_text:
+                    doc.add_paragraph(p_text, style='List Bullet')
             elif line:
                 doc.add_paragraph(line)
         
+        # Save document to a byte stream
         bio = io.BytesIO()
         doc.save(bio)
+        bio.seek(0)
         return bio.getvalue()
 
     def _create_pdf_from_markdown(self, markdown_content: str) -> bytes:
         """Creates a styled PDF from Markdown content."""
         html_content = markdown.markdown(markdown_content)
+        # Professional styling for the PDF
         css = CSS(string='''
-            @page { size: A4; margin: 2cm; }
-            body { font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; font-size: 11pt; line-height: 1.5; }
-            h1 { font-size: 24pt; color: #2c3e50; border-bottom: 2px solid #2c3e50; padding-bottom: 5px; }
-            h2 { font-size: 16pt; color: #34495e; border-bottom: 1px solid #bdc3c7; padding-bottom: 3px; margin-top: 25px; }
-            h3 { font-size: 12pt; color: #34495e; font-weight: bold; }
-            ul { list-style-type: disc; }
+            @page { size: A4; margin: 1.5cm; }
+            body { font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; font-size: 11pt; line-height: 1.5; color: #333; }
+            h1 { font-size: 22pt; color: #2c3e50; border-bottom: 2px solid #2c3e50; padding-bottom: 5px; margin-top: 0;}
+            h2 { font-size: 16pt; color: #34495e; border-bottom: 1px solid #bdc3c7; padding-bottom: 3px; margin-top: 20px; }
+            h3 { font-size: 12pt; color: #34495e; font-weight: bold; margin-top: 15px;}
+            ul { list-style-type: disc; padding-left: 20px; }
+            p { margin-bottom: 10px; }
+            a { color: #2980b9; text-decoration: none; }
         ''')
         return HTML(string=html_content).write_pdf(stylesheets=[css])
 
@@ -505,9 +557,11 @@ class DocumentGenerator:
         md_parts = [f"# {user_profile.get('full_name', 'Your Name')}"]
         contact_info = " | ".join(filter(None, [user_profile.get('phone'), user_profile.get('email'), user_profile.get('address'), user_profile.get('linkedin_url')]))
         md_parts.append(contact_info)
+        
         if user_profile.get('professional_summary'):
             md_parts.append("\n## PROFESSIONAL SUMMARY")
             md_parts.append(f"{user_profile.get('professional_summary')}")
+        
         if experiences:
             md_parts.append("\n## PROFESSIONAL EXPERIENCE")
             for exp in experiences:
@@ -515,13 +569,16 @@ class DocumentGenerator:
                 md_parts.append(f"**{exp.get('company')}** | *{exp.get('dates')}*")
                 bullets = exp.get('resume_bullets', '').split('\n')
                 for bullet in bullets:
-                    if bullet.strip(): md_parts.append(f"- {bullet.strip()}")
+                    if bullet.strip():
+                        md_parts.append(f"- {bullet.strip().lstrip('- ')}")
+        
         return "\n".join(md_parts)
 
     def generate_ksc_response(self, ksc_question: str, user_profile: Dict, experiences: List[Dict[str, Any]], company_intel: Dict[str, str], role_title: str) -> Dict[str, Any]:
         """Generates a KSC response and returns a dictionary with content."""
         relevant_experiences = find_relevant_experiences(ksc_question, experiences)
         experience_text = "\n\n".join([f"Title: {exp['title']}\nSituation: {exp['situation']}\nTask: {exp['task']}\nAction: {exp['action']}\nResult: {exp['result']}" for exp in relevant_experiences])
+        
         prompt = f"""
         **Persona:** You are an expert career coach for the Australian Community Services sector. Your tone is professional and authentic, mirroring the user's personal style if provided.
         **User's Personal Style Profile:** {user_profile.get('style_profile', 'N/A')}
@@ -529,39 +586,41 @@ class DocumentGenerator:
         **Task:** Write a compelling KSC response to the question below.
         **KSC Question:** "{ksc_question}"
         **Reasoning Framework:**
-        1.  **Deconstruct:** Identify the core competency.
-        2.  **Select Evidence:** Choose the strongest parts of the STAR stories to prove this competency.
-        3.  **Draft:** Structure the response using the STAR method, adopting the user's personal style and aligning with company intelligence.
+        1.  **Deconstruct:** Identify the core competency in the KSC question.
+        2.  **Select Evidence:** Choose the strongest parts of the provided STAR stories to prove this competency.
+        3.  **Draft:** Structure the response using the STAR method. Weave in the user's personal style and align with the company's values.
         **Candidate's Most Relevant Career Examples:**
         ---
         {experience_text if experience_text else "No specific examples provided."}
         ---
-        **Output Format:** Generate clean Markdown.
+        **Output Format:** Generate clean, professional Markdown. Start directly with the response, do not add extra headings like "KSC Response".
         """
         markdown_content = self._generate_ai_content(prompt)
         return {"html": markdown_content}
 
     def generate_cover_letter_markdown(self, user_profile: Dict, experiences: List[Dict[str, Any]], job_details: Dict[str, Any], company_intel: Dict[str, Any]) -> str:
         """Generates a cover letter as a Markdown string."""
-        most_relevant_experience = find_relevant_experiences(job_details.get('full_text', ''), experiences, top_k=1)
+        job_desc_for_search = job_details.get('full_text', '')
+        most_relevant_experience = find_relevant_experiences(job_desc_for_search, experiences, top_k=1)
         experience_snippet = ""
         if most_relevant_experience:
             exp = most_relevant_experience[0]
-            experience_snippet = f"In my role as a {exp['title']} at {exp['company']}, I was responsible for {exp['task']}. I successfully {exp['action']}, which resulted in {exp['result']}."
+            experience_snippet = f"For instance, in my role as a {exp['title']} at {exp['company']}, I was responsible for {exp['task']}. I successfully {exp['action']}, which directly resulted in {exp['result']}."
+        
         prompt = f"""
-        **Persona:** You are an expert career advisor, writing a cover letter for the Australian Community Services sector. Your tone is professional and warm, mirroring the user's personal style if provided.
+        **Persona:** You are an expert career advisor writing a cover letter for the Australian Community Services sector. Your tone is professional and warm, mirroring the user's personal style if provided.
         **User's Personal Style Profile:** {user_profile.get('style_profile', 'N/A')}
         **Company Intelligence:** {company_intel.get('values_mission', 'I am deeply impressed by your commitment to the community.')}
         **Task:** Write a compelling three-paragraph cover letter.
         **Reasoning Framework:**
-        1.  **Opening:** State the role and express enthusiasm for the company, referencing company intel.
-        2.  **Body:** Connect skills to job requirements, integrating the "Most Relevant Career Example" to show a key achievement.
-        3.  **Closing:** Reiterate interest and include a clear call to action.
+        1.  **Opening:** State the role you are applying for and express genuine enthusiasm for the company, referencing a specific piece of company intelligence.
+        2.  **Body:** Connect your skills directly to the key requirements of the job. Integrate the "Most Relevant Career Example" to provide concrete proof of your abilities and achievements.
+        3.  **Closing:** Reiterate your strong interest in the role and the company. Include a clear call to action, stating your eagerness to discuss your application further.
         **Most Relevant Career Example:**
         ---
-        {experience_snippet if experience_snippet else "The applicant has extensive experience in community services."}
+        {experience_snippet if experience_snippet else "The applicant has extensive experience directly relevant to this role's requirements."}
         ---
-        **Output Format:** Generate clean Markdown.
+        **Output Format:** Generate clean, professional Markdown for a cover letter.
         """
         return self._generate_ai_content(prompt)
 
@@ -573,8 +632,8 @@ class DocumentGenerator:
         **Reasoning Framework:**
         1.  **Keyword Analysis:** Extract key skills, qualifications, and duties from the job description.
         2.  **Resume Parsing:** Identify skills, experiences, and achievements in the resume.
-        3.  **Alignment Scoring:** Calculate a percentage score based on how well the resume matches the key requirements. Score harshly.
-        4.  **Feedback Generation:** Provide a list of strengths (what matched well) and a list of concrete suggestions for improvement.
+        3.  **Alignment Scoring:** Calculate a percentage score based on how well the resume matches the key requirements. Score harshly and realistically. A perfect match is rare.
+        4.  **Feedback Generation:** Provide a list of strengths (what matched well) and a list of concrete, actionable suggestions for improvement (e.g., "Add the keyword 'Child Safety Framework' to your skills section," or "Quantify the achievement in your role at Hope Services by mentioning the number of clients served.").
         
         **Job Description:**
         ---
@@ -596,29 +655,31 @@ class DocumentGenerator:
         """
         response_text = self._generate_ai_content(prompt)
         try:
+            # Clean up potential markdown formatting around the JSON
             json_str = response_text.strip().replace("```json", "").replace("```", "")
             return json.loads(json_str)
         except json.JSONDecodeError:
             return {"error": "Could not parse AI response.", "raw_text": response_text}
 EOF
 
-# --- main_app.py ---
+# --- main_app.py (Robust) ---
 cat <<'EOF' > main_app.py
 # main_app.py
 import streamlit as st
 import database as db
-import os
 from api_clients import GeminiClient, PerplexityClient
 from intelligence_booster import IntelligenceBoosterModule
 from document_generator import DocumentGenerator
 
 # --- Session State Management ---
+# Initialize session state variables to avoid errors on first run
 if 'doc_type' not in st.session_state: st.session_state.doc_type = "Resume"
 if 'job_desc' not in st.session_state: st.session_state.job_desc = ""
 if 'company_name' not in st.session_state: st.session_state.company_name = ""
 if 'role_title' not in st.session_state: st.session_state.role_title = ""
 if 'generated_content' not in st.session_state: st.session_state.generated_content = None
 
+# --- Page Configuration ---
 st.set_page_config(page_title="Resume Agent", page_icon="🤖", layout="wide")
 db.initialize_db()
 
@@ -638,38 +699,60 @@ def get_api_clients():
         st.sidebar.error(f"Failed to initialize API clients: {e}")
         return None, None
 
+# --- Main App UI ---
 st.title("🤖 Resume Agent")
 st.write("Welcome, Nishant! This tool helps you create tailored job application documents.")
 st.info("Start by filling out your User Profile and Career History. Use the Style Analyzer to teach the agent your writing style.")
 
 # --- Sidebar for Inputs ---
 st.sidebar.header("Document Generation Controls")
-st.session_state.doc_type = st.sidebar.selectbox("Select Document Type", ("Resume", "KSC Response", "Cover Letter"), key="doc_type_key")
+st.session_state.doc_type = st.sidebar.selectbox(
+    "Select Document Type", 
+    ("Resume", "KSC Response", "Cover Letter"), 
+    key="doc_type_key"
+)
 
 st.sidebar.subheader("Job Details")
-st.session_state.job_desc = st.sidebar.text_area("Paste Job Description / KSC Here", value=st.session_state.job_desc, height=200, key="job_desc_key", help="For KSC/Cover Letter, paste the text here. For Resumes, this is optional.")
-st.session_state.company_name = st.sidebar.text_input("Company / Organization Name", value=st.session_state.company_name, key="company_name_key")
-st.session_state.role_title = st.sidebar.text_input("Role Title", value=st.session_state.role_title, key="role_title_key")
+st.session_state.job_desc = st.sidebar.text_area(
+    "Paste Job Description / KSC Here", 
+    value=st.session_state.job_desc, 
+    height=200, 
+    key="job_desc_key", 
+    help="For KSC/Cover Letter, paste the text here. For Resumes, this is optional."
+)
+st.session_state.company_name = st.sidebar.text_input(
+    "Company / Organization Name", 
+    value=st.session_state.company_name, 
+    key="company_name_key"
+)
+st.session_state.role_title = st.sidebar.text_input(
+    "Role Title", 
+    value=st.session_state.role_title, 
+    key="role_title_key"
+)
 
 if st.sidebar.button("✨ Generate Document", type="primary", use_container_width=True):
     gemini_client, perplexity_client = get_api_clients()
-    if not all([gemini_client, perplexity_client]): st.stop()
+    if not all([gemini_client, perplexity_client]):
+        st.stop()
     if not st.session_state.job_desc and st.session_state.doc_type != "Resume":
-        st.sidebar.error("Please paste the job description or KSC question."); st.stop()
+        st.sidebar.error("Please paste the job description or KSC question.")
+        st.stop()
 
-    with st.spinner("Processing..."):
+    with st.spinner("Processing... This may take a moment."):
         try:
             job_details = {"full_text": st.session_state.job_desc, "role_title": st.session_state.role_title}
             user_profile = db.get_user_profile() or {}
             experiences = db.get_all_experiences()
             
+            # Get company intelligence if company and role are provided
             intel_booster = IntelligenceBoosterModule(perplexity_client)
             company_intel = {}
             if st.session_state.company_name and st.session_state.role_title:
                 company_intel = intel_booster.get_intelligence(st.session_state.company_name, st.session_state.role_title)
             
             doc_generator = DocumentGenerator(gemini_client)
-            markdown_content = ""
+            markdown_content = "" # Initialize empty string
 
             if st.session_state.doc_type == "Resume":
                 markdown_content = doc_generator.generate_resume_markdown(user_profile, experiences)
@@ -687,21 +770,39 @@ if st.sidebar.button("✨ Generate Document", type="primary", use_container_widt
                 }
             else:
                 st.session_state.generated_content = None
-                st.warning("Failed to generate content.")
+                st.warning("Failed to generate content. The AI may have returned an empty response.")
 
         except Exception as e:
             st.error(f"An unexpected error occurred: {e}")
             st.session_state.generated_content = None
 
+# --- Display Generated Content ---
 if st.session_state.generated_content:
     st.divider()
     st.header("Generated Document")
     content = st.session_state.generated_content
+    
+    # --- ENHANCEMENT: Descriptive filenames ---
+    doc_type_slug = st.session_state.doc_type.replace(' ', '_')
+    company_slug = st.session_state.company_name.replace(' ', '_') if st.session_state.company_name else "Company"
+    base_filename = f"{doc_type_slug}_for_{company_slug}_Nishant_Dougall"
+
     col1, col2 = st.columns(2)
     with col1:
-        st.download_button("📥 Download as DOCX", content.get("docx", b""), f"{st.session_state.doc_type.replace(' ', '_')}_Nishant_Dougall.docx", "application/vnd.openxmlformats-officedocument.wordprocessingml.document")
+        st.download_button(
+            "📥 Download as DOCX", 
+            content.get("docx", b""), 
+            f"{base_filename}.docx", 
+            "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+        )
     with col2:
-        st.download_button("📥 Download as PDF", content.get("pdf", b""), f"{st.session_state.doc_type.replace(' ', '_')}_Nishant_Dougall.pdf", "application/pdf")
+        st.download_button(
+            "📥 Download as PDF", 
+            content.get("pdf", b""), 
+            f"{base_filename}.pdf", 
+            "application/pdf"
+        )
+        
     st.markdown("---")
     st.subheader("Preview")
     st.markdown(content.get("html", "<p>No content generated.</p>"), unsafe_allow_html=True)
@@ -725,18 +826,29 @@ with st.form(key="profile_form"):
     with col1:
         full_name = st.text_input("Full Name", value=profile.get("full_name", "Nishant Jonas Dougall"))
         email = st.text_input("Email Address", value=profile.get("email", ""))
-        phone = st.text_input("Phone Number", value=profile.get("phone", "+61412202666"))
     with col2:
+        phone = st.text_input("Phone Number", value=profile.get("phone", "+61412202666"))
         address = st.text_input("Address", value=profile.get("address", "Unit 2 418 high street, Northcote VICTORIA 3070, Australia"))
-        linkedin_url = st.text_input("LinkedIn Profile URL", value=profile.get("linkedin_url", ""))
+    
+    linkedin_url = st.text_input("LinkedIn Profile URL", value=profile.get("linkedin_url", ""))
+    
     st.header("Professional Summary")
     professional_summary = st.text_area("Summary / Personal Statement", value=profile.get("professional_summary", ""), height=150, placeholder="Write a brief 2-4 sentence summary of your career, skills, and goals.")
     
+    # This field is now managed in the Style Analyzer page, so we just read it here.
     style_profile_text = profile.get("style_profile", "")
 
     submit_button = st.form_submit_button("Save Profile")
     if submit_button:
-        profile_data = {"full_name": full_name, "email": email, "phone": phone, "address": address, "linkedin_url": linkedin_url, "professional_summary": professional_summary, "style_profile": style_profile_text}
+        profile_data = {
+            "full_name": full_name, 
+            "email": email, 
+            "phone": phone, 
+            "address": address, 
+            "linkedin_url": linkedin_url, 
+            "professional_summary": professional_summary, 
+            "style_profile": style_profile_text
+        }
         db.save_user_profile(profile_data)
         st.toast("✅ Profile saved successfully!")
 EOF
@@ -752,37 +864,53 @@ st.title("📝 Manage Career History")
 st.write("Add, edit, or delete your career examples here. These examples, including your 'gold standard' resume bullet points, will be used by the AI to tailor your job applications.")
 
 st.header("Add or Edit Experience")
-query_params = st.experimental_get_query_params()
-edit_id = query_params.get("edit", [None])[0]
-initial_data = {}
-if edit_id:
-    initial_data = db.get_experience_by_id(int(edit_id))
-    if not initial_data:
-        st.error("Experience not found."); edit_id = None
+# Using st.session_state for robust editing state management
+if 'edit_id' not in st.session_state:
+    st.session_state.edit_id = None
 
-with st.form(key="experience_form", clear_on_submit=not edit_id):
+# Check query params to set editing state
+query_params = st.experimental_get_query_params()
+edit_id_from_url = query_params.get("edit", [None])[0]
+if edit_id_from_url:
+    st.session_state.edit_id = int(edit_id_from_url)
+    st.experimental_set_query_params() # Clear query params after reading
+
+initial_data = {}
+if st.session_state.edit_id:
+    initial_data = db.get_experience_by_id(st.session_state.edit_id)
+    if not initial_data:
+        st.error("Experience not found.")
+        st.session_state.edit_id = None
+
+with st.form(key="experience_form", clear_on_submit=True):
     col1, col2, col3 = st.columns(3)
     with col1: title = st.text_input("Job Title", value=initial_data.get("title", ""), placeholder="e.g., Community Support Worker")
     with col2: company = st.text_input("Company / Organization", value=initial_data.get("company", ""), placeholder="e.g., Hope Services")
     with col3: dates = st.text_input("Dates of Employment", value=initial_data.get("dates", ""), placeholder="e.g., Jan 2022 - Present")
+    
     st.subheader("STAR Method Example")
     situation = st.text_area("Situation", value=initial_data.get("situation", ""), placeholder="Describe the context or background.")
     task = st.text_area("Task", value=initial_data.get("task", ""), placeholder="What was your specific goal or responsibility?")
     action = st.text_area("Action", value=initial_data.get("action", ""), placeholder="What steps did you take?")
     result = st.text_area("Result", value=initial_data.get("result", ""), placeholder="What was the outcome? Use quantifiable data if possible.")
+    
     skills = st.text_input("Related Skills (comma-separated)", value=initial_data.get("related_skills", ""), placeholder="e.g., crisis-intervention, client-advocacy")
+    
     st.markdown("---")
     st.subheader("Gold Standard Resume Bullet Points")
     st.info("Add your best, pre-written resume bullet points for this experience (one per line). The AI will use these to build your resume.")
-    resume_bullets = st.text_area("Resume Bullet Points", value=initial_data.get("resume_bullets", ""), height=150, placeholder="e.g., Achieved X by doing Y, resulting in Z.")
-    submit_button = st.form_submit_button(label="Save Experience" if not edit_id else "Update Experience")
+    resume_bullets = st.text_area("Resume Bullet Points", value=initial_data.get("resume_bullets", ""), height=150, placeholder="- Achieved X by doing Y, resulting in Z.")
+    
+    submit_button = st.form_submit_button(label="Update Experience" if st.session_state.edit_id else "Save Experience")
+    
     if submit_button:
-        if not all([title, company, dates, situation, task, action, result]):
-            st.warning("Please fill out all fields.")
+        if not all([title, situation, task, action, result]):
+            st.warning("Please fill out at least the Title and all STAR method fields.")
         else:
-            if edit_id:
-                db.update_experience(int(edit_id), title, company, dates, situation, task, action, result, skills, resume_bullets)
-                st.toast("✅ Experience updated successfully!"); st.experimental_set_query_params()
+            if st.session_state.edit_id:
+                db.update_experience(st.session_state.edit_id, title, company, dates, situation, task, action, result, skills, resume_bullets)
+                st.toast("✅ Experience updated successfully!")
+                st.session_state.edit_id = None # Reset edit state
             else:
                 db.add_experience(title, company, dates, situation, task, action, result, skills, resume_bullets)
                 st.toast("✅ Experience added successfully!")
@@ -794,19 +922,26 @@ if not all_experiences:
     st.info("You haven't added any experiences yet. Use the form above to get started.")
 else:
     for exp in all_experiences:
-        with st.expander(f"**{exp['title']} at {exp['company']}** (ID: {exp['id']})"):
-            st.markdown(f"**Dates:** {exp['dates']}"); st.markdown(f"**Situation:** {exp['situation']}")
-            st.markdown(f"**Task:** {exp['task']}"); st.markdown(f"**Action:** {exp['action']}")
-            st.markdown(f"**Result:** {exp['result']}"); st.markdown(f"**Skills:** `{exp['related_skills']}`")
+        with st.expander(f"**{exp['title']} at {exp['company']}**"):
+            st.markdown(f"**Dates:** {exp['dates']}")
+            st.markdown(f"**Situation:** {exp['situation']}")
+            st.markdown(f"**Task:** {exp['task']}")
+            st.markdown(f"**Action:** {exp['action']}")
+            st.markdown(f"**Result:** {exp['result']}")
+            st.markdown(f"**Skills:** `{exp['related_skills']}`")
             if exp.get('resume_bullets'):
-                st.markdown("**Resume Bullets:**"); st.code(exp['resume_bullets'], language='text')
+                st.markdown("**Resume Bullets:**")
+                st.code(exp['resume_bullets'], language='text')
+            
             col1, col2 = st.columns([0.1, 1])
             with col1:
                 if st.button("Edit", key=f"edit_{exp['id']}"):
-                    st.experimental_set_query_params(edit=exp['id']); st.experimental_rerun()
+                    st.session_state.edit_id = exp['id']
+                    st.experimental_rerun()
             with col2:
                 if st.button("Delete", key=f"delete_{exp['id']}", type="primary"):
-                    db.delete_experience(exp['id']); st.experimental_rerun()
+                    db.delete_experience(exp['id'])
+                    st.experimental_rerun()
 EOF
 
 # --- pages/2_Settings.py ---
@@ -837,6 +972,7 @@ with st.expander("API Keys", expanded=True):
 
 with st.expander("Data Management", expanded=True):
     st.write("Download your entire career database as a backup, or upload a previous backup to restore your data.")
+    
     col1, col2 = st.columns(2)
     with col1:
         try:
@@ -858,7 +994,7 @@ with st.expander("Data Management", expanded=True):
     st.warning("Restoring will overwrite your current data. A backup of your current database will be created as `career_history.db.bak`.")
 EOF
 
-# --- pages/3_Job_Vault.py ---
+# --- pages/3_Job_Vault.py (Corrected) ---
 cat <<'EOF' > pages/3_Job_Vault.py
 # pages/3_Job_Vault.py
 import streamlit as st
@@ -871,6 +1007,7 @@ st.set_page_config(page_title="Job Vault", layout="wide")
 st.title("🏦 Job Vault")
 st.write("Save job opportunities here by pasting a URL. The agent will scrape the content and summarize it for you.")
 
+# --- Add New Job ---
 st.header("Add New Job Opportunity")
 new_job_url = st.text_input("Paste Job Ad URL here")
 if st.button("Save and Scrape Job"):
@@ -879,21 +1016,39 @@ if st.button("Save and Scrape Job"):
         if job_id:
             st.toast(f"Job from {new_job_url} saved! Now processing...")
             gemini_key = st.session_state.get("gemini_api_key")
-            if not gemini_key: st.error("Gemini API key not set in Settings. Cannot summarize."); st.stop()
+            if not gemini_key:
+                st.error("Gemini API key not set in Settings. Cannot summarize.")
+                st.stop()
+            
             gemini_client = GeminiClient(api_key=gemini_key)
             scraper_module = PDScraperModule(gemini_client)
+            
             try:
                 with st.spinner("Scraping and summarizing... This may take a moment."):
                     summary_data = scraper_module.process_url(new_job_url)
-                    if "error" in summary_data: st.error(f"Failed: {summary_data['error']}")
+                    
+                    if "error" in summary_data:
+                        st.error(f"Failed: {summary_data['error']}")
                     else:
-                        db.update_job_scrape_data(job_id, summary_data['full_text'])
-                        db.update_job_summary(job_id, summary_data, summary_data.get('company_name', 'N/A'), summary_data.get('role_title', 'N/A'))
-                        st.toast("✅ Scraping and summarization complete!"); st.experimental_rerun()
-            except Exception as e: st.error(f"An error occurred during processing: {e}")
-        else: st.warning("This URL has already been saved.")
-    else: st.warning("Please enter a URL.")
+                        db.update_job_scrape_data(job_id, summary_data.get('full_text', ''))
+                        
+                        # Correctly pass company_name and role_title to the database function.
+                        db.update_job_summary(
+                            job_id, 
+                            summary_data, 
+                            summary_data.get('company_name', 'N/A'), 
+                            summary_data.get('role_title', 'N/A')
+                        )
+                        st.toast("✅ Scraping and summarization complete!")
+                        st.experimental_rerun()
+            except Exception as e:
+                st.error(f"An error occurred during processing: {e}")
+        else:
+            st.warning("This URL has already been saved.")
+    else:
+        st.warning("Please enter a URL.")
 
+# --- Display Saved Jobs ---
 st.header("Saved Jobs")
 all_jobs = db.get_all_saved_jobs()
 if not all_jobs:
@@ -903,23 +1058,34 @@ else:
         summary = json.loads(job['summary_json']) if job['summary_json'] else {}
         role_title = job.get('role_title') or summary.get('role_title', 'Processing...')
         company_name = job.get('company_name') or summary.get('company_name', 'Processing...')
+        
         with st.expander(f"**{role_title}** at **{company_name}** (Status: {job['status']})"):
             st.markdown(f"**URL:** [{job['url']}]({job['url']})")
+            
             if job['status'] == 'Summarized' and summary:
-                st.markdown("**AI Summary:**"); st.markdown(f"**Key Responsibilities:**")
-                for resp in summary.get('key_responsibilities', []): st.markdown(f"- {resp}")
+                st.markdown("**AI Summary:**")
+                st.markdown(f"**Key Responsibilities:**")
+                for resp in summary.get('key_responsibilities', []):
+                    st.markdown(f"- {resp}")
                 st.markdown(f"**Essential Skills:**")
-                for skill in summary.get('essential_skills', []): st.markdown(f"- {skill}")
-            elif job['status'] == 'Scraped': st.info("This job has been scraped but is awaiting summarization.")
-            else: st.info("This job is saved and waiting to be processed.")
+                for skill in summary.get('essential_skills', []):
+                    st.markdown(f"- {skill}")
+            elif job['status'] == 'Scraped':
+                st.info("This job has been scraped but is awaiting summarization.")
+            else:
+                st.info("This job is saved and waiting to be processed.")
+            
             col1, col2 = st.columns([0.2, 1])
             with col1:
                 if st.button("Load this Job", key=f"load_{job['id']}"):
-                    st.session_state.job_desc = job.get('full_text', ''); st.session_state.company_name = job.get('company_name', ''); st.session_state.role_title = job.get('role_title', '')
+                    st.session_state.job_desc = job.get('full_text', '')
+                    st.session_state.company_name = job.get('company_name', '')
+                    st.session_state.role_title = job.get('role_title', '')
                     st.toast(f"Loaded job '{role_title}' into the main generator.", icon='✅')
             with col2:
                 if st.button("Delete Job", key=f"delete_{job['id']}", type="primary"):
-                    db.delete_job(job['id']); st.experimental_rerun()
+                    db.delete_job(job['id'])
+                    st.experimental_rerun()
 EOF
 
 # --- pages/4_Style_Analyzer.py ---
@@ -947,6 +1113,10 @@ if uploaded_files:
         with st.spinner("Parsing files and analyzing your style..."):
             try:
                 combined_text = parse_files(uploaded_files)
+                if not combined_text.strip():
+                    st.warning("Could not extract any text from the uploaded files. Please check the files and try again.")
+                    st.stop()
+
                 gemini_client = GeminiClient(api_key=gemini_key)
                 prompt = f"""
                 **Persona:** You are an expert writing coach and linguistic analyst.
@@ -964,7 +1134,7 @@ if uploaded_files:
                 ---
                 
                 **Output Format:**
-                Provide a concise summary of the user's writing style in 3-4 bullet points. This summary will be used as a style guide for the AI.
+                Provide a concise summary of the user's writing style in 3-4 bullet points. This summary will be used as a style guide for the AI. Start directly with the bullet points.
                 """
                 style_profile = gemini_client.generate_text(prompt)
                 db.save_style_profile(style_profile)
@@ -984,21 +1154,21 @@ else:
     st.info("No style profile has been generated yet. Upload some documents to create one.")
 EOF
 
-# --- pages/5_Resume_Scorer.py ---
+# --- pages/5_Resume_Scorer.py (Improved) ---
 cat <<'EOF' > pages/5_Resume_Scorer.py
 # pages/5_Resume_Scorer.py
 import streamlit as st
-import database as db
 from api_clients import GeminiClient
-from file_parser import parse_files, parse_pdf, parse_docx
+from file_parser import parse_pdf, parse_docx
+from document_generator import DocumentGenerator
 import io
 import json
-from document_generator import DocumentGenerator
 
 st.set_page_config(page_title="Resume Scorer", layout="wide")
 st.title("🎯 Resume Scorer")
 st.write("Upload your final resume and the job description to get an AI-powered match score and actionable feedback.")
 
+# --- Inputs ---
 st.header("Inputs")
 col1, col2 = st.columns(2)
 
@@ -1008,7 +1178,7 @@ with col1:
 
 with col2:
     st.subheader("Target Job Description")
-    job_desc_text = st.text_area("Paste the full job description here", height=250)
+    job_desc_text = st.text_area("Paste the full job description here", height=300)
 
 if st.button("Score My Resume", type="primary", disabled=not (resume_file and job_desc_text)):
     gemini_key = st.session_state.get("gemini_api_key")
@@ -1018,6 +1188,7 @@ if st.button("Score My Resume", type="primary", disabled=not (resume_file and jo
 
     with st.spinner("Parsing documents and scoring your resume..."):
         try:
+            # 1. Parse resume file
             if resume_file.type == "application/pdf":
                 resume_text = parse_pdf(io.BytesIO(resume_file.getvalue()))
             elif resume_file.type == "application/vnd.openxmlformats-officedocument.wordprocessingml.document":
@@ -1025,9 +1196,15 @@ if st.button("Score My Resume", type="primary", disabled=not (resume_file and jo
             else:
                 resume_text = resume_file.getvalue().decode("utf-8")
 
+            if not resume_text.strip():
+                st.error("Could not extract text from your resume file. Please check the file.")
+                st.stop()
+
+            # 2. Get score from AI
             doc_generator = DocumentGenerator(GeminiClient(api_key=gemini_key))
             score_data = doc_generator.score_resume(resume_text, job_desc_text)
 
+            # 3. Display results
             if "error" in score_data:
                 st.error(f"Scoring failed: {score_data['error']}")
                 st.code(score_data.get('raw_text'))
@@ -1035,8 +1212,9 @@ if st.button("Score My Resume", type="primary", disabled=not (resume_file and jo
                 st.header("📊 Scoring Results")
                 score = score_data.get("match_score", 0)
                 
+                # Display score and use score/100 for the progress bar value.
                 st.subheader(f"Overall Match Score: {score}%")
-                st.progress(score)
+                st.progress(score / 100)
 
                 st.subheader("✅ Strengths")
                 for strength in score_data.get("strengths", []):
@@ -1050,14 +1228,20 @@ if st.button("Score My Resume", type="primary", disabled=not (resume_file and jo
             st.error(f"An error occurred during scoring: {e}")
 EOF
 
-echo "\n✅ Corrected project setup complete!"
-echo "\nNext steps:"
-echo "1. Create and activate a Python virtual environment:"
+echo "\n✅ All project files have been created successfully!"
+echo "\n--- Next Steps ---"
+echo "1. Make this script executable:"
+echo "   chmod +x setup.sh"
+echo ""
+echo "2. Create and activate a Python virtual environment:"
 echo "   python3 -m venv venv"
 echo "   source venv/bin/activate"
-echo "2. Install the required packages:"
+echo ""
+echo "3. Install the required packages:"
 echo "   pip install -r requirements.txt"
-echo "3. Install Playwright browsers (one-time setup):"
+echo ""
+echo "4. Install Playwright browsers (this is a one-time setup):"
 echo "   playwright install"
-echo "4. Run the Streamlit application:"
+echo ""
+echo "5. Run the Streamlit application:"
 echo "   streamlit run main_app.py\n"
