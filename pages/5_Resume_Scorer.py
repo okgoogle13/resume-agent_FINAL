@@ -1,7 +1,7 @@
 # pages/5_Resume_Scorer.py
 import streamlit as st
 from api_clients import GeminiClient
-from file_parser import parse_pdf, parse_docx
+from file_parser import parse_single_uploaded_file # Updated import
 from document_generator import DocumentGenerator
 import io
 import json
@@ -30,13 +30,13 @@ if st.button("Score My Resume", type="primary", disabled=not (resume_file and jo
 
     with st.spinner("Parsing documents and scoring your resume..."):
         try:
-            # 1. Parse resume file
-            if resume_file.type == "application/pdf":
-                resume_text = parse_pdf(io.BytesIO(resume_file.getvalue()))
-            elif resume_file.type == "application/vnd.openxmlformats-officedocument.wordprocessingml.document":
-                resume_text = parse_docx(io.BytesIO(resume_file.getvalue()))
-            else:
-                resume_text = resume_file.getvalue().decode("utf-8")
+            # 1. Parse resume file using the centralized parser
+            resume_text = parse_single_uploaded_file(resume_file)
+
+            # Check if parsing returned an error message (they usually start with "[")
+            if resume_text.startswith("["):
+                st.error(f"Failed to parse resume: {resume_text}")
+                st.stop()
 
             # 2. Get score from AI
             doc_generator = DocumentGenerator(GeminiClient(api_key=gemini_key))
