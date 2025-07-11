@@ -194,3 +194,95 @@ class DocumentGenerator:
             return json.loads(json_str)
         except json.JSONDecodeError:
             return {"error": "Could not parse AI response.", "raw_text": response_text}
+
+    def analyze_document_for_keywords_ats(self, resume_text: str, job_description_text: str) -> Dict[str, Any]:
+        """
+        Analyzes a resume against a job description for keyword matching and ATS friendliness.
+        Orchestrates two AI calls:
+        1. Extract critical keywords from the job description.
+        2. Analyze the resume against these keywords and for ATS compatibility.
+        """
+        # --- Interaction 1: Job Description Keyword Extraction ---
+        jd_prompt = f"""
+Analyze the following job description. Extract key skills, technical terms, qualifications, and responsibilities.
+Identify up to 10-15 critical keywords/phrases that are essential for an ATS and human reviewer.
+For each keyword/phrase, categorize it as 'technical_skill', 'soft_skill', 'qualification', or 'responsibility'.
+Provide the output as a single, valid JSON object only, with a key "critical_keywords", which is an array of objects, each containing "term" and "category".
+
+Job Description:
+---
+{job_description_text}
+---
+
+Example Output:
+{{
+  "critical_keywords": [
+    {{"term": "Project Management", "category": "technical_skill"}},
+    {{"term": "Agile Methodology", "category": "technical_skill"}},
+    {{"term": "Team Leadership", "category": "soft_skill"}}
+  ]
+}}
+"""
+        try:
+            jd_response_text = self._generate_ai_content(jd_prompt)
+            # Clean up potential markdown formatting
+            jd_json_str = jd_response_text.strip().replace("```json", "").replace("```", "")
+            jd_data = json.loads(jd_json_str)
+            critical_keywords = jd_data.get("critical_keywords", [])
+            if not critical_keywords: # Basic check if keywords were extracted
+                 return {"error": "Could not extract critical keywords from job description.", "raw_jd_response": jd_response_text}
+        except json.JSONDecodeError:
+            return {"error": "Could not parse keyword extraction response from AI.", "raw_jd_response": jd_response_text}
+        except Exception as e: # Catch other potential errors during keyword extraction
+            return {"error": f"An unexpected error occurred during keyword extraction: {str(e)}", "raw_jd_response": jd_response_text if 'jd_response_text' in locals() else "N/A"}
+
+        # --- Interaction 2: Resume Analysis against Keywords and ATS Friendliness ---
+        resume_analysis_prompt = f"""
+You are an expert ATS and resume analyst.
+Analyze the provided resume based on the following critical keywords:
+{json.dumps(critical_keywords)}
+
+The resume text is:
+---
+{resume_text}
+---
+
+Provide your analysis as a single, valid JSON object only, with the following structure:
+1. "keyword_analysis": An array of objects. For each critical keyword, indicate if it's "present" (true/false) in the resume. If "false", provide one brief, actionable "suggestion" on how to naturally integrate it. The "term" and "category" for each keyword should be included from the input.
+2. "ats_friendliness": An object containing:
+    - "overall_score": A score from 0-100 indicating ATS friendliness (0 poor, 100 excellent).
+    - "issues": An array of objects, where each object has:
+        - "issue_type": e.g., "Use of Tables", "Columns Detected", "Non-Standard Font", "Image Detected", "Complex Headers/Footers", "Lack of Keywords".
+        - "description": A brief explanation of the issue.
+        - "suggestion": A brief suggestion to fix it.
+3. "general_suggestions": An array of 2-3 general actionable suggestions for improving the resume's keyword optimization or ATS compatibility.
+
+Example Output:
+{{
+  "keyword_analysis": [
+    {{"term": "Project Management", "category": "technical_skill", "present": true, "suggestion": null}},
+    {{"term": "Agile Methodology", "category": "technical_skill", "present": false, "suggestion": "Consider adding 'Agile Methodology' to your project description where you managed the software development lifecycle."}}
+  ],
+  "ats_friendliness": {{
+    "overall_score": 75,
+    "issues": [
+      {{"issue_type": "Columns Detected", "description": "The resume uses a two-column layout which might confuse some ATS.", "suggestion": "Consider a single-column layout for better ATS parsing."}}
+    ]
+  }},
+  "general_suggestions": [
+    "Ensure your contact information is at the top and easily parsable."
+  ]
+}}
+"""
+        try:
+            resume_response_text = self._generate_ai_content(resume_analysis_prompt)
+            # Clean up potential markdown formatting
+            resume_json_str = resume_response_text.strip().replace("```json", "").replace("```", "")
+            # The final response is the resume analysis data, but we'll also add the extracted keywords for the UI
+            final_data = json.loads(resume_json_str)
+            final_data["extracted_critical_keywords"] = critical_keywords # Add this for easier UI rendering
+            return final_data
+        except json.JSONDecodeError:
+            return {"error": "Could not parse resume analysis response from AI.", "raw_resume_response": resume_response_text, "extracted_critical_keywords": critical_keywords}
+        except Exception as e: # Catch other potential errors during resume analysis
+            return {"error": f"An unexpected error occurred during resume analysis: {str(e)}", "raw_resume_response": resume_response_text if 'resume_response_text' in locals() else "N/A", "extracted_critical_keywords": critical_keywords}
