@@ -1,8 +1,8 @@
 # pages/5_Resume_Scorer.py
 import streamlit as st
-import database as db
 from api_clients import GeminiClient
-from file_parser import parse_files, parse_pdf, parse_docx
+from file_parser import parse_pdf, parse_docx
+from document_generator import DocumentGenerator
 import io
 import json
 
@@ -39,7 +39,6 @@ if st.button("Score My Resume", type="primary", disabled=not (resume_file and jo
                 resume_text = resume_file.getvalue().decode("utf-8")
 
             # 2. Get score from AI
-            from document_generator import DocumentGenerator
             doc_generator = DocumentGenerator(GeminiClient(api_key=gemini_key))
             score_data = doc_generator.score_resume(resume_text, job_desc_text)
 
@@ -51,11 +50,9 @@ if st.button("Score My Resume", type="primary", disabled=not (resume_file and jo
                 st.header("📊 Scoring Results")
                 score = score_data.get("match_score", 0)
                 
-                # Display score with a progress bar and color
+                # --- FIX APPLIED HERE ---
+                # Display score and use score/100 for the progress bar value.
                 st.subheader(f"Overall Match Score: {score}%")
-                progress_color = "red"
-                if score > 75: progress_color = "green"
-                elif score > 50: progress_color = "orange"
                 st.progress(score / 100)
 
                 st.subheader("✅ Strengths")
