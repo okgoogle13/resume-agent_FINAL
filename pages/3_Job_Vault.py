@@ -18,20 +18,38 @@ if st.button("Save and Scrape Job"):
         if job_id:
             st.toast(f"Job from {new_job_url} saved! Now processing...")
             gemini_key = st.session_state.get("gemini_api_key")
-            if not gemini_key: st.error("Gemini API key not set in Settings. Cannot summarize."); st.stop()
+            if not gemini_key:
+                st.error("Gemini API key not set in Settings. Cannot summarize.")
+                st.stop()
+            
             gemini_client = GeminiClient(api_key=gemini_key)
             scraper_module = PDScraperModule(gemini_client)
+            
             try:
-                with st.spinner("Scraping and summarizing..."):
+                with st.spinner("Scraping and summarizing... This may take a moment."):
                     summary_data = scraper_module.process_url(new_job_url)
-                    if "error" in summary_data: st.error(f"Failed: {summary_data['error']}")
+                    
+                    if "error" in summary_data:
+                        st.error(f"Failed: {summary_data['error']}")
                     else:
-                        db.update_job_scrape_data(job_id, summary_data['full_text'])
-                        db.update_job_summary(job_id, summary_data, summary_data.get('role_title', 'N/A'), summary_data.get('role_title', 'N/A'))
-                        st.toast("✅ Scraping and summarization complete!"); st.experimental_rerun()
-            except Exception as e: st.error(f"An error occurred during processing: {e}")
-        else: st.warning("This URL has already been saved.")
-    else: st.warning("Please enter a URL.")
+                        db.update_job_scrape_data(job_id, summary_data.get('full_text', ''))
+                        
+                        # --- FIX APPLIED HERE ---
+                        # Correctly pass company_name and role_title to the database function.
+                        db.update_job_summary(
+                            job_id, 
+                            summary_data, 
+                            summary_data.get('company_name', 'N/A'), 
+                            summary_data.get('role_title', 'N/A')
+                        )
+                        st.toast("✅ Scraping and summarization complete!")
+                        st.experimental_rerun()
+            except Exception as e:
+                st.error(f"An error occurred during processing: {e}")
+        else:
+            st.warning("This URL has already been saved.")
+    else:
+        st.warning("Please enter a URL.")
 
 # --- Display Saved Jobs ---
 st.header("Saved Jobs")
@@ -42,21 +60,32 @@ else:
     for job in all_jobs:
         summary = json.loads(job['summary_json']) if job['summary_json'] else {}
         role_title = job.get('role_title') or summary.get('role_title', 'Processing...')
-        company_name = job.get('company_name', 'Processing...')
+        company_name = job.get('company_name') or summary.get('company_name', 'Processing...')
+        
         with st.expander(f"**{role_title}** at **{company_name}** (Status: {job['status']})"):
             st.markdown(f"**URL:** [{job['url']}]({job['url']})")
+            
             if job['status'] == 'Summarized' and summary:
-                st.markdown("**AI Summary:**"); st.markdown(f"**Key Responsibilities:**")
-                for resp in summary.get('key_responsibilities', []): st.markdown(f"- {resp}")
+                st.markdown("**AI Summary:**")
+                st.markdown(f"**Key Responsibilities:**")
+                for resp in summary.get('key_responsibilities', []):
+                    st.markdown(f"- {resp}")
                 st.markdown(f"**Essential Skills:**")
-                for skill in summary.get('essential_skills', []): st.markdown(f"- {skill}")
-            elif job['status'] == 'Scraped': st.info("This job has been scraped but is awaiting summarization.")
-            else: st.info("This job is saved and waiting to be processed.")
-            col1, col2 = st.columns(2)
+                for skill in summary.get('essential_skills', []):
+                    st.markdown(f"- {skill}")
+            elif job['status'] == 'Scraped':
+                st.info("This job has been scraped but is awaiting summarization.")
+            else:
+                st.info("This job is saved and waiting to be processed.")
+            
+            col1, col2 = st.columns([0.2, 1])
             with col1:
                 if st.button("Load this Job", key=f"load_{job['id']}"):
-                    st.session_state.job_desc = job.get('full_text', ''); st.session_state.company_name = job.get('company_name', ''); st.session_state.role_title = job.get('role_title', '')
-                    st.toast(f"Loaded job '{role_title}' into the main generator. Navigate to 'Document Generator' to proceed.", icon='✅')
+                    st.session_state.job_desc = job.get('full_text', '')
+                    st.session_state.company_name = job.get('company_name', '')
+                    st.session_state.role_title = job.get('role_title', '')
+                    st.toast(f"Loaded job '{role_title}' into the main generator.", icon='✅')
             with col2:
                 if st.button("Delete Job", key=f"delete_{job['id']}", type="primary"):
-                    db.delete_job(job['id']); st.experimental_rerun()
+                    db.delete_job(job['id'])
+                    st.experimental_rerun()
