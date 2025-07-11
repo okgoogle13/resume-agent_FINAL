@@ -1,7 +1,6 @@
 # main_app.py
 import streamlit as st
 import database as db
-import os
 from api_clients import GeminiClient, PerplexityClient
 from intelligence_booster import IntelligenceBoosterModule
 from document_generator import DocumentGenerator
@@ -74,7 +73,7 @@ if st.sidebar.button("✨ Generate Document", type="primary", use_container_widt
         st.sidebar.error("Please paste the job description or KSC question.")
         st.stop()
 
-    with st.spinner("Processing..."):
+    with st.spinner("Processing... This may take a moment."):
         try:
             job_details = {"full_text": st.session_state.job_desc, "role_title": st.session_state.role_title}
             user_profile = db.get_user_profile() or {}
@@ -89,7 +88,8 @@ if st.sidebar.button("✨ Generate Document", type="primary", use_container_widt
             doc_generator = DocumentGenerator(gemini_client)
             markdown_content = "" # Initialize empty string
 
-            # --- CORRECTED LOGIC ---
+            # --- REFACTORED LOGIC ---
+            # This logic now correctly handles the different return types from the generator functions.
             if st.session_state.doc_type == "Resume":
                 markdown_content = doc_generator.generate_resume_markdown(user_profile, experiences)
             elif st.session_state.doc_type == "KSC Response":
@@ -99,7 +99,7 @@ if st.sidebar.button("✨ Generate Document", type="primary", use_container_widt
             elif st.session_state.doc_type == "Cover Letter":
                 markdown_content = doc_generator.generate_cover_letter_markdown(user_profile, experiences, job_details, company_intel)
             
-            # Now, generate file versions for ALL document types from the markdown
+            # Now, generate file versions for ALL document types from the final markdown
             if markdown_content:
                 st.session_state.generated_content = {
                     "html": markdown_content,
@@ -108,7 +108,7 @@ if st.sidebar.button("✨ Generate Document", type="primary", use_container_widt
                 }
             else:
                 st.session_state.generated_content = None
-                st.warning("Failed to generate content.")
+                st.warning("Failed to generate content. The AI may have returned an empty response.")
 
         except Exception as e:
             st.error(f"An unexpected error occurred: {e}")
@@ -120,19 +120,24 @@ if st.session_state.generated_content:
     st.header("Generated Document")
     content = st.session_state.generated_content
     
+    # --- ENHANCEMENT: Descriptive filenames ---
+    doc_type_slug = st.session_state.doc_type.replace(' ', '_')
+    company_slug = st.session_state.company_name.replace(' ', '_') if st.session_state.company_name else "Company"
+    base_filename = f"{doc_type_slug}_for_{company_slug}_Nishant_Dougall"
+
     col1, col2 = st.columns(2)
     with col1:
         st.download_button(
             "📥 Download as DOCX", 
             content.get("docx", b""), 
-            f"{st.session_state.doc_type.replace(' ', '_')}_Nishant_Dougall.docx", 
+            f"{base_filename}.docx", 
             "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
         )
     with col2:
         st.download_button(
             "📥 Download as PDF", 
             content.get("pdf", b""), 
-            f"{st.session_state.doc_type.replace(' ', '_')}_Nishant_Dougall.pdf", 
+            f"{base_filename}.pdf", 
             "application/pdf"
         )
         
