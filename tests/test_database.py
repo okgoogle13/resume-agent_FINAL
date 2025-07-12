@@ -1,144 +1,144 @@
 # tests/test_database.py
-import pytest
 import sqlite3
-from unittest.mock import patch
-# Make sure the database module can be imported
-# This might need adjustment based on your project structure.
-# If 'database.py' is in the root, and 'tests' is a subdir,
-# you might need to adjust sys.path or use relative imports if it's part of a package.
-# For now, assuming direct import works or will be configured via PYTHONPATH.
-import database
+import pytest
+from database import (
+    get_db_connection,
+    initialize_db,
+    add_experience,
+    get_all_experiences,
+    get_experience_by_id,
+    update_experience,
+    delete_experience,
+    save_user_profile,
+    get_user_profile,
+    save_style_profile,
+    add_job,
+    update_job_scrape_data,
+    update_job_summary,
+    get_all_saved_jobs,
+    delete_job,
+)
 
 @pytest.fixture
-def memory_db():
-    """Fixture to use an in-memory SQLite database for tests."""
-    # Patch DB_FILE for all db operations within database.py to use :memory:
-    with patch('database.DB_FILE', ':memory:'):
-        # Create a single connection for the test session
-        conn = database.get_db_connection()
-        # Initialize the schema using this specific connection
-        database.initialize_db(conn=conn)
-        yield conn
-        # The connection will be closed when the test session ends or if an error occurs
-        conn.close()
+def db_path(tmp_path):
+    """Fixture to create a temporary database for testing."""
+    return tmp_path / "test_career_history.db"
 
-def test_initialize_db(memory_db):
-    """Test that tables are created by initialize_db."""
-    cursor = memory_db.cursor()
-    cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='user_profile'")
-    assert cursor.fetchone() is not None, "user_profile table should exist"
-    cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='career_history'")
-    assert cursor.fetchone() is not None, "career_history table should exist"
-    cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='saved_jobs'")
-    assert cursor.fetchone() is not None, "saved_jobs table should exist"
+@pytest.fixture(autouse=True)
+def setup_database(db_path, monkeypatch):
+    """Fixture to set up and tear down the database for each test."""
+    monkeypatch.setattr("database.DB_FILE", db_path)
+    initialize_db()
+    yield
+    # No teardown needed as tmp_path handles it
 
-def test_save_and_get_user_profile(memory_db, sample_user_profile_data):
-    """Test saving and retrieving a user profile."""
-    database.save_user_profile(sample_user_profile_data, conn=memory_db)
-    profile = database.get_user_profile(conn=memory_db)
+def test_initialize_db(db_path):
+    """Test that the database and tables are created."""
+    assert db_path.exists()
+    conn = sqlite3.connect(db_path)
+    cursor = conn.cursor()
+    cursor.execute("SELECT name FROM sqlite_master WHERE type='table';")
+    tables = {row[0] for row in cursor.fetchall()}
+    assert "career_history" in tables
+    assert "user_profile" in tables
+    assert "saved_jobs" in tables
+    conn.close()
 
-    assert profile is not None
-    assert profile["full_name"] == sample_user_profile_data["full_name"]
-    assert profile["email"] == sample_user_profile_data["email"]
-    assert profile["style_profile"] == sample_user_profile_data["style_profile"]
+def test_add_and_get_experience(db_path):
+    """Test adding and retrieving a career experience."""
+    add_experience("Test Title", "Test Company", "2022-2023", "Situation", "Task", "Action", "Result", "Skills", "Bullets")
+    experiences = get_all_experiences()
+    assert len(experiences) == 1
+    assert experiences[0]["title"] == "Test Title"
 
-def test_get_user_profile_empty(memory_db):
-    """Test retrieving a user profile when none is saved."""
-    profile = database.get_user_profile(conn=memory_db)
-    assert profile is None
+def test_get_experience_by_id(db_path):
+    """Test retrieving an experience by its ID."""
+    add_experience("Test Title", "Test Company", "2022-2023", "Situation", "Task", "Action", "Result", "Skills", "Bullets")
+    exp_id = get_all_experiences()[0]['id']
+    experience = get_experience_by_id(exp_id)
+    assert experience is not None
+    assert experience["title"] == "Test Title"
 
-def test_add_and_get_all_experiences(memory_db, sample_experiences_data):
-    """Test adding and retrieving career experiences."""
-    exp1 = sample_experiences_data[0]
-    exp2 = sample_experiences_data[1]
+def test_update_experience(db_path):
+    """Test updating an existing experience."""
+    add_experience("Old Title", "Old Company", "2021-2022", "Old Situation", "Old Task", "Old Action", "Old Result", "Old Skills", "Old Bullets")
+    exp_id = get_all_experiences()[0]['id']
+    update_experience(exp_id, "New Title", "New Company", "2022-2023", "New Situation", "New Task", "New Action", "New Result", "New Skills", "New Bullets")
+    experience = get_experience_by_id(exp_id)
+    assert experience["title"] == "New Title"
+    assert experience["company"] == "New Company"
 
-    database.add_experience(
-        title=exp1["title"], company=exp1["company"], dates=exp1["dates"],
-        situation=exp1["situation"], task=exp1["task"], action=exp1["action"],
-        result=exp1["result"], skills=exp1["related_skills"], bullets=exp1["resume_bullets"],
-        conn=memory_db
-    )
-    database.add_experience(
-        title=exp2["title"], company=exp2["company"], dates=exp2["dates"],
-        situation=exp2["situation"], task=exp2["task"], action=exp2["action"],
-        result=exp2["result"], skills=exp2["related_skills"], bullets=exp2["resume_bullets"],
-        conn=memory_db
-    )
-
-    experiences = database.get_all_experiences(conn=memory_db)
-    assert len(experiences) == 2
-    # Experiences are returned in DESC order of ID
-    assert experiences[0]["title"] == exp2["title"]
-    assert experiences[1]["title"] == exp1["title"]
-
-def test_get_all_experiences_empty(memory_db):
-    """Test retrieving experiences when none are saved."""
-    experiences = database.get_all_experiences(conn=memory_db)
+def test_delete_experience(db_path):
+    """Test deleting an experience."""
+    add_experience("Test Title", "Test Company", "2022-2023", "Situation", "Task", "Action", "Result", "Skills", "Bullets")
+    exp_id = get_all_experiences()[0]['id']
+    delete_experience(exp_id)
+    experiences = get_all_experiences()
     assert len(experiences) == 0
 
-# Example of how you might test other CRUD, if you expand later:
-# def test_add_and_get_experience_by_id(memory_db, sample_experiences_data):
-#     exp1 = sample_experiences_data[0]
-#     database.add_experience(
-#         title=exp1["title"], company=exp1["company"], dates=exp1["dates"],
-#         situation=exp1["situation"], task=exp1["task"], action=exp1["action"],
-#         result=exp1["result"], skills=exp1["related_skills"], bullets=exp1["resume_bullets"],
-#         conn=memory_db
-#     )
-#     # Assuming add_experience auto-increments ID starting from 1
-#     retrieved_exp = database.get_experience_by_id(1, conn=memory_db)
-#     assert retrieved_exp is not None
-#     assert retrieved_exp["title"] == exp1["title"]
-
-# def test_update_experience(memory_db, sample_experiences_data):
-#     exp1 = sample_experiences_data[0]
-#     database.add_experience(
-#         title=exp1["title"], company=exp1["company DATES (Dates)":exp1["dates"],
-#         situation=exp1["situation"], task=exp1["task"], action=exp1["action"],
-#         result=exp1["result"], skills=exp1["related_skills"], bullets=exp1["resume_bullets"],
-#         conn=memory_db
-#     )
-#     updated_title = "Senior Software Engineer"
-#     database.update_experience(
-#         1, title=updated_title, company=exp1["company"], dates=exp1["dates"],
-#         situation=exp1["situation"], task=exp1["task"], action=exp1["action"],
-#         result=exp1["result"], skills=exp1["related_skills"], bullets=exp1["resume_bullets"],
-#         conn=memory_db
-#     )
-#     updated_exp = database.get_experience_by_id(1, conn=memory_db)
-#     assert updated_exp["title"] == updated_title
-
-# def test_delete_experience(memory_db, sample_experiences_data):
-#     exp1 = sample_experiences_data[0]
-#     database.add_experience(
-#         title=exp1["title"], company=exp1["company"], dates=exp1["dates"],
-#         situation=exp1["situation"], task=exp1["task"], action=exp1["action"],
-#         result=exp1["result"], skills=exp1["related_skills"], bullets=exp1["resume_bullets"],
-#         conn=memory_db
-#     )
-#     database.delete_experience(1, conn=memory_db)
-#     assert database.get_experience_by_id(1, conn=memory_db) is None
-#     assert len(database.get_all_experiences(conn=memory_db)) == 0
-
-# --- Tests for Style Profile ---
-def test_save_and_get_style_profile(memory_db):
-    """Test saving and retrieving the style profile specifically."""
-    style_text = "Very eloquent and persuasive."
-    # First save a basic profile, as save_style_profile updates an existing one or creates one if id=1 doesn't exist
-    database.save_user_profile({"full_name": "Test User"}, conn=memory_db)
-    database.save_style_profile(style_text, conn=memory_db)
-
-    profile = database.get_user_profile(conn=memory_db)
+def test_save_and_get_user_profile(db_path):
+    """Test saving and retrieving a user profile."""
+    profile_data = {
+        "full_name": "Test User",
+        "email": "test@example.com",
+        "phone": "1234567890",
+        "address": "123 Test St",
+        "linkedin_url": "linkedin.com/test",
+        "professional_summary": "A test summary.",
+        "style_profile": "A test style profile."
+    }
+    save_user_profile(profile_data)
+    profile = get_user_profile()
     assert profile is not None
-    assert profile["style_profile"] == style_text
+    assert profile["full_name"] == "Test User"
+    assert profile["email"] == "test@example.com"
 
-def test_save_style_profile_on_empty_db(memory_db):
-    """Test save_style_profile when user_profile table is empty."""
-    style_text = "Direct and to the point."
-    database.save_style_profile(style_text, conn=memory_db) # Should insert a new row with id=1
-
-    profile = database.get_user_profile(conn=memory_db)
+def test_save_style_profile(db_path):
+    """Test saving a style profile."""
+    save_style_profile("New style profile.")
+    profile = get_user_profile()
     assert profile is not None
-    assert profile["id"] == 1 # Check that it created the default row
-    assert profile["style_profile"] == style_text
-    assert profile["full_name"] is None # Other fields should be None initially
+    assert profile["style_profile"] == "New style profile."
+
+def test_add_and_get_saved_jobs(db_path):
+    """Test adding and retrieving a saved job."""
+    add_job("http://example.com/job1")
+    jobs = get_all_saved_jobs()
+    assert len(jobs) == 1
+    assert jobs[0]["url"] == "http://example.com/job1"
+    assert jobs[0]["status"] == "Saved"
+
+def test_add_duplicate_job(db_path):
+    """Test that adding a duplicate job URL fails gracefully."""
+    add_job("http://example.com/job1")
+    result = add_job("http://example.com/job1")
+    assert result is None
+    jobs = get_all_saved_jobs()
+    assert len(jobs) == 1
+
+def test_update_job_scrape_data(db_path):
+    """Test updating a job with scraped data."""
+    job_id = add_job("http://example.com/job1")
+    update_job_scrape_data(job_id, "This is the scraped job text.")
+    jobs = get_all_saved_jobs()
+    assert jobs[0]["full_text"] == "This is the scraped job text."
+    assert jobs[0]["status"] == "Scraped"
+
+def test_update_job_summary(db_path):
+    """Test updating a job with a summary."""
+    job_id = add_job("http://example.com/job1")
+    summary_data = {"role": "Software Engineer", "requirements": ["Python", "SQL"]}
+    update_job_summary(job_id, summary_data, "Test Corp", "Senior Developer")
+    jobs = get_all_saved_jobs()
+    assert jobs[0]["company_name"] == "Test Corp"
+    assert jobs[0]["role_title"] == "Senior Developer"
+    assert jobs[0]["status"] == "Summarized"
+    import json
+    assert json.loads(jobs[0]["summary_json"]) == summary_data
+
+def test_delete_job(db_path):
+    """Test deleting a saved job."""
+    job_id = add_job("http://example.com/job1")
+    delete_job(job_id)
+    jobs = get_all_saved_jobs()
+    assert len(jobs) == 0

@@ -30,7 +30,7 @@ class PDScraperModule:
                 return content
         except Exception as e:
             logger.error(f"Error with Playwright navigation for {url}: {e}")
-            return f"<html><body>Error fetching page: {e}</body></html>"
+            raise
 
     def _extract_text_from_html(self, html: str) -> str:
         """

@@ -16,23 +16,11 @@ def get_db_connection():
     conn.row_factory = sqlite3.Row
     return conn
 
-def initialize_db(conn: Optional[sqlite3.Connection] = None):
-    """
-    Creates the necessary tables if they don't exist.
-    If a connection is provided, it uses it; otherwise, it creates a new one.
-    """
-    if conn:
-        # Use the provided connection directly, don't wrap in context manager
-        # as the caller (fixture) will manage its lifecycle.
+def initialize_db():
+    """Creates the necessary tables if they don't exist."""
+    with get_db_connection() as conn:
         cursor = conn.cursor()
-    else:
-        # Original behavior: create and manage connection internally
-        db_conn_cm = get_db_connection()
-        conn = db_conn_cm.__enter__() # Manually enter for this path
-        cursor = conn.cursor()
-
-    # Career History Table
-    try:
+        # Career History Table
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS career_history (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -74,204 +62,92 @@ def initialize_db(conn: Optional[sqlite3.Connection] = None):
             )
         """)
         conn.commit()
-    finally:
-        # If db_conn_cm was created in this function, ensure it's closed.
-        if 'db_conn_cm' in locals() and db_conn_cm:
-            db_conn_cm.__exit__(None, None, None)
 
 # --- Career History Functions ---
-def add_experience(title: str, company: str, dates: str, situation: str, task: str, action: str, result: str, skills: str, bullets: str, conn: Optional[sqlite3.Connection] = None):
-    """Adds a new career experience. Uses provided conn or creates new."""
-    db_conn_cm = None
-    if not conn:
-        db_conn_cm = get_db_connection()
-        conn = db_conn_cm.__enter__()
-    try:
+def add_experience(title: str, company: str, dates: str, situation: str, task: str, action: str, result: str, skills: str, bullets: str):
+    """Adds a new career experience to the database."""
+    with get_db_connection() as conn:
         conn.execute("INSERT INTO career_history (title, company, dates, situation, task, action, result, related_skills, resume_bullets) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)", (title, company, dates, situation, task, action, result, skills, bullets))
         conn.commit()
-    finally:
-        if db_conn_cm:
-            db_conn_cm.__exit__(None, None, None)
 
-def get_all_experiences(conn: Optional[sqlite3.Connection] = None) -> List[Dict[str, Any]]:
-    """Retrieves all career experiences. Uses provided conn or creates new."""
-    db_conn_cm = None
-    if not conn:
-        db_conn_cm = get_db_connection()
-        conn = db_conn_cm.__enter__()
-
-    experiences = []
-    try:
+def get_all_experiences() -> List[Dict[str, Any]]:
+    """Retrieves all career experiences from the database."""
+    with get_db_connection() as conn:
         cursor = conn.execute("SELECT * FROM career_history ORDER BY id DESC")
-        experiences = [dict(row) for row in cursor.fetchall()]
-    finally:
-        if db_conn_cm:
-            db_conn_cm.__exit__(None, None, None)
-    return experiences
+        return [dict(row) for row in cursor.fetchall()]
 
-def get_experience_by_id(exp_id: int, conn: Optional[sqlite3.Connection] = None) -> Optional[Dict[str, Any]]:
-    """Retrieves a single career experience by ID. Uses provided conn or creates new."""
-    db_conn_cm = None
-    if not conn:
-        db_conn_cm = get_db_connection()
-        conn = db_conn_cm.__enter__()
-
-    experience_dict = None
-    try:
+def get_experience_by_id(exp_id: int) -> Optional[Dict[str, Any]]:
+    """Retrieves a single career experience by its ID."""
+    with get_db_connection() as conn:
         cursor = conn.execute("SELECT * FROM career_history WHERE id = ?", (exp_id,))
-        experience_row = cursor.fetchone()
-        experience_dict = dict(experience_row) if experience_row else None
-    finally:
-        if db_conn_cm:
-            db_conn_cm.__exit__(None, None, None)
-    return experience_dict
+        experience = cursor.fetchone()
+        return dict(experience) if experience else None
 
-def update_experience(exp_id: int, title: str, company: str, dates: str, situation: str, task: str, action: str, result: str, skills: str, bullets: str, conn: Optional[sqlite3.Connection] = None):
-    """Updates an existing career experience. Uses provided conn or creates new."""
-    db_conn_cm = None
-    if not conn:
-        db_conn_cm = get_db_connection()
-        conn = db_conn_cm.__enter__()
-    try:
+def update_experience(exp_id: int, title: str, company: str, dates: str, situation: str, task: str, action: str, result: str, skills: str, bullets: str):
+    """Updates an existing career experience in the database."""
+    with get_db_connection() as conn:
         conn.execute("UPDATE career_history SET title = ?, company = ?, dates = ?, situation = ?, task = ?, action = ?, result = ?, related_skills = ?, resume_bullets = ? WHERE id = ?", (title, company, dates, situation, task, action, result, skills, bullets, exp_id))
         conn.commit()
-    finally:
-        if db_conn_cm:
-            db_conn_cm.__exit__(None, None, None)
 
-def delete_experience(exp_id: int, conn: Optional[sqlite3.Connection] = None):
-    """Deletes a career experience. Uses provided conn or creates new."""
-    db_conn_cm = None
-    if not conn:
-        db_conn_cm = get_db_connection()
-        conn = db_conn_cm.__enter__()
-    try:
+def delete_experience(exp_id: int):
+    """Deletes a career experience from the database."""
+    with get_db_connection() as conn:
         conn.execute("DELETE FROM career_history WHERE id = ?", (exp_id,))
         conn.commit()
-    finally:
-        if db_conn_cm:
-            db_conn_cm.__exit__(None, None, None)
 
 # --- User Profile Functions ---
-def save_user_profile(profile_data: Dict[str, str], conn: Optional[sqlite3.Connection] = None):
-    """Saves or updates the user's profile. Uses provided conn or creates new."""
-    db_conn_cm = None
-    if not conn:
-        db_conn_cm = get_db_connection()
-        conn = db_conn_cm.__enter__()
-
-    try:
+def save_user_profile(profile_data: Dict[str, str]):
+    """Saves or updates the user's profile."""
+    with get_db_connection() as conn:
         conn.execute("INSERT OR REPLACE INTO user_profile (id, full_name, email, phone, address, linkedin_url, professional_summary, style_profile) VALUES (1, ?, ?, ?, ?, ?, ?, ?)", (profile_data.get('full_name'), profile_data.get('email'), profile_data.get('phone'), profile_data.get('address'), profile_data.get('linkedin_url'), profile_data.get('professional_summary'), profile_data.get('style_profile')))
         conn.commit()
-    finally:
-        if db_conn_cm:
-            db_conn_cm.__exit__(None, None, None)
 
-
-def get_user_profile(conn: Optional[sqlite3.Connection] = None) -> Optional[Dict[str, Any]]:
-    """Retrieves the user's profile. Uses provided conn or creates new."""
-    db_conn_cm = None
-    if not conn:
-        db_conn_cm = get_db_connection()
-        conn = db_conn_cm.__enter__()
-
-    profile = None
-    try:
+def get_user_profile() -> Optional[Dict[str, Any]]:
+    """Retrieves the user's profile."""
+    with get_db_connection() as conn:
         cursor = conn.execute("SELECT * FROM user_profile WHERE id = 1")
-        profile_row = cursor.fetchone()
-        profile = dict(profile_row) if profile_row else None
-    finally:
-        if db_conn_cm:
-            db_conn_cm.__exit__(None, None, None)
-    return profile
+        profile = cursor.fetchone()
+        return dict(profile) if profile else None
 
-def save_style_profile(style_profile_text: str, conn: Optional[sqlite3.Connection] = None):
-    """Saves the user's writing style profile. Uses provided conn or creates new."""
-    db_conn_cm = None
-    if not conn:
-        db_conn_cm = get_db_connection()
-        conn = db_conn_cm.__enter__()
-
-    try:
+def save_style_profile(style_profile_text: str):
+    """Saves the user's writing style profile."""
+    with get_db_connection() as conn:
         conn.execute("INSERT OR IGNORE INTO user_profile (id) VALUES (1)")
         conn.execute("UPDATE user_profile SET style_profile = ? WHERE id = 1", (style_profile_text,))
         conn.commit()
-    finally:
-        if db_conn_cm:
-            db_conn_cm.__exit__(None, None, None)
 
 # --- Saved Jobs Functions ---
-def add_job(url: str, conn: Optional[sqlite3.Connection] = None) -> Optional[int]:
-    """Adds a new job by URL, ensuring it's unique. Uses provided conn or creates new."""
-    db_conn_cm = None
-    if not conn:
-        db_conn_cm = get_db_connection()
-        conn = db_conn_cm.__enter__()
+def add_job(url: str) -> Optional[int]:
+    """Adds a new job by URL, ensuring it's unique."""
+    with get_db_connection() as conn:
+        try:
+            cursor = conn.execute("INSERT INTO saved_jobs (url, status) VALUES (?, 'Saved')", (url,))
+            conn.commit()
+            return cursor.lastrowid
+        except sqlite3.IntegrityError:
+            return None # Job with this URL already exists
 
-    last_id = None
-    try:
-        cursor = conn.execute("INSERT INTO saved_jobs (url, status) VALUES (?, 'Saved')", (url,))
-        conn.commit()
-        last_id = cursor.lastrowid
-    except sqlite3.IntegrityError:
-        last_id = None # Job with this URL already exists
-    finally:
-        if db_conn_cm:
-            db_conn_cm.__exit__(None, None, None)
-    return last_id
-
-def update_job_scrape_data(job_id: int, full_text: str, conn: Optional[sqlite3.Connection] = None):
-    """Updates a job record with the scraped text content. Uses provided conn or creates new."""
-    db_conn_cm = None
-    if not conn:
-        db_conn_cm = get_db_connection()
-        conn = db_conn_cm.__enter__()
-    try:
+def update_job_scrape_data(job_id: int, full_text: str):
+    """Updates a job record with the scraped text content."""
+    with get_db_connection() as conn:
         conn.execute("UPDATE saved_jobs SET full_text = ?, status = 'Scraped' WHERE id = ?", (full_text, job_id))
         conn.commit()
-    finally:
-        if db_conn_cm:
-            db_conn_cm.__exit__(None, None, None)
 
-def update_job_summary(job_id: int, summary: Dict, company_name: str, role_title: str, conn: Optional[sqlite3.Connection] = None):
-    """Updates a job record with the AI-generated summary. Uses provided conn or creates new."""
+def update_job_summary(job_id: int, summary: Dict, company_name: str, role_title: str):
+    """Updates a job record with the AI-generated summary."""
     summary_text = json.dumps(summary)
-    db_conn_cm = None
-    if not conn:
-        db_conn_cm = get_db_connection()
-        conn = db_conn_cm.__enter__()
-    try:
+    with get_db_connection() as conn:
         conn.execute("UPDATE saved_jobs SET summary_json = ?, company_name = ?, role_title = ?, status = 'Summarized' WHERE id = ?", (summary_text, company_name, role_title, job_id))
         conn.commit()
-    finally:
-        if db_conn_cm:
-            db_conn_cm.__exit__(None, None, None)
 
-def get_all_saved_jobs(conn: Optional[sqlite3.Connection] = None) -> List[Dict[str, Any]]:
-    """Retrieves all saved jobs from the database. Uses provided conn or creates new."""
-    db_conn_cm = None
-    if not conn:
-        db_conn_cm = get_db_connection()
-        conn = db_conn_cm.__enter__()
-
-    jobs = []
-    try:
+def get_all_saved_jobs() -> List[Dict[str, Any]]:
+    """Retrieves all saved jobs from the database."""
+    with get_db_connection() as conn:
         cursor = conn.execute("SELECT * FROM saved_jobs ORDER BY saved_at DESC")
-        jobs = [dict(row) for row in cursor.fetchall()]
-    finally:
-        if db_conn_cm:
-            db_conn_cm.__exit__(None, None, None)
-    return jobs
+        return [dict(row) for row in cursor.fetchall()]
 
-def delete_job(job_id: int, conn: Optional[sqlite3.Connection] = None):
-    """Deletes a saved job from the database. Uses provided conn or creates new."""
-    db_conn_cm = None
-    if not conn:
-        db_conn_cm = get_db_connection()
-        conn = db_conn_cm.__enter__()
-    try:
+def delete_job(job_id: int):
+    """Deletes a saved job from the database."""
+    with get_db_connection() as conn:
         conn.execute("DELETE FROM saved_jobs WHERE id = ?", (job_id,))
         conn.commit()
-    finally:
-        if db_conn_cm:
-            db_conn_cm.__exit__(None, None, None)

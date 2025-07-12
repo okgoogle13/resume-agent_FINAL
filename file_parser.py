@@ -26,7 +26,9 @@ def parse_files(uploaded_files: List[st.runtime.uploaded_file_manager.UploadedFi
 def parse_pdf(file: io.BytesIO) -> str:
     """Extracts text from an uploaded PDF file."""
     try:
-        pdf_reader = PdfReader(file)
+        # Create a BytesIO stream from the file's content
+        pdf_stream = io.BytesIO(file.getvalue())
+        pdf_reader = PdfReader(pdf_stream)
         text = ""
         for page in pdf_reader.pages:
             text += page.extract_text() or ""
@@ -37,7 +39,9 @@ def parse_pdf(file: io.BytesIO) -> str:
 def parse_docx(file: io.BytesIO) -> str:
     """Extracts text from an uploaded DOCX file."""
     try:
-        doc = Document(file)
+        # Create a BytesIO stream from the file's content
+        docx_stream = io.BytesIO(file.getvalue())
+        doc = Document(docx_stream)
         text = "\n".join([para.text for para in doc.paragraphs])
         return text
     except Exception as e:

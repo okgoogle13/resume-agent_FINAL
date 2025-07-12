@@ -45,7 +45,7 @@ class SemanticCache:
         if not self._cache:
             return None
 
-        query_embedding = embedding_model.encode([query])
+        query_embedding = embedding_model.encode([query]).reshape(1, -1)
         
         # Retrieve all cached embeddings and their corresponding keys
         cached_keys = list(self._embeddings.keys())
@@ -74,9 +74,9 @@ class SemanticCache:
             query: The query string to cache.
             result: The result from the API call to cache.
         """
-        query_embedding = embedding_model.encode([query])
+        query_embedding = embedding_model.encode([query]).reshape(1, -1)
         self._cache[query] = result
-        self._embeddings[query] = query_embedding
+        self._embeddings[query] = query_embedding[0] # Store the 1D array
         print(f"Cache SET: Added new query to cache.")
 
 

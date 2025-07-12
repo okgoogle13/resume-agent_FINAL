@@ -53,6 +53,3 @@ class PerplexityClient:
         except httpx.RequestError as e:
             print(f"An error occurred while requesting from Perplexity: {e}")
             raise
-        except httpx.HTTPStatusError as e:
-            print(f"Perplexity API returned an error: {e.response.status_code} - {e.response.text}")
-            raise
