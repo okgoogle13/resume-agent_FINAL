@@ -1,150 +1,147 @@
+# main_app.py
 import streamlit as st
+import database as db
+from api_clients import GeminiClient, PerplexityClient
+from intelligence_booster import IntelligenceBoosterModule
+from document_generator import DocumentGenerator
+from config import APP_TITLE, USER_NAME_PLACEHOLDER
 
-def main():
-    st.set_page_config(layout="wide")
-    st.title("AI Resume Builder")
+# --- Session State Management ---
+# Initialize session state variables to avoid errors on first run
+if 'doc_type' not in st.session_state: st.session_state.doc_type = "Resume"
+if 'job_desc' not in st.session_state: st.session_state.job_desc = ""
+if 'company_name' not in st.session_state: st.session_state.company_name = ""
+if 'role_title' not in st.session_state: st.session_state.role_title = ""
+if 'generated_content' not in st.session_state: st.session_state.generated_content = None
 
-    st.header("1. Input Job Details")
-    job_description = st.text_area("Paste the full Job Description here:", height=200, key="job_description")
+# --- Page Configuration ---
+st.set_page_config(page_title=APP_TITLE, page_icon="🤖", layout="wide")
+db.initialize_db()
 
-    st.header("2. Upload Your Base Documents")
-    base_resume = st.file_uploader(
-        "Upload Base Resume (PDF, DOCX, TXT)",
-        type=['pdf', 'docx', 'txt'],
-        key="base_resume"
-    )
-    base_cover_letter = st.file_uploader(
-        "Upload Base Cover Letter Template (PDF, DOCX, TXT, optional)",
-        type=['pdf', 'docx', 'txt'],
-        key="base_cover_letter"
-    )
-    base_ksc = st.file_uploader(
-        "Upload Base KSC Examples (PDF, DOCX, TXT, optional)",
-        type=['pdf', 'docx', 'txt'],
-        key="base_ksc"
-    )
+def get_api_clients():
+    """Initializes and returns API clients, checking for API keys first."""
+    gemini_key = st.session_state.get("gemini_api_key")
+    perplexity_key = st.session_state.get("perplexity_api_key")
 
-# --- Placeholder Document Processing Logic ---
-from config import USER_NAME_PLACEHOLDER
-
-def extract_text_from_file(uploaded_file_object):
-    """
-    Placeholder function to extract text from an uploaded file.
-    For Phase 1, this will be very basic and might assume TXT or just return a filename.
-    Proper PDF/DOCX parsing will be added later.
-    """
-    if uploaded_file_object is None:
-        return ""
-
+    if not gemini_key or not perplexity_key:
+        st.sidebar.warning("Please enter your API keys in the Settings page.")
+        return None, None
     try:
-        file_type = uploaded_file_object.type
-        file_name = uploaded_file_object.name
-
-        if file_type == "text/plain":
-            return uploaded_file_object.getvalue().decode("utf-8")
-        elif file_type == "application/pdf":
-            import pypdf
-            pdf_reader = pypdf.PdfReader(uploaded_file_object)
-            text = ""
-            for page_num in range(len(pdf_reader.pages)):
-                page = pdf_reader.pages[page_num]
-                text += page.extract_text() or "" # Add null check for empty pages
-            if not text.strip(): # Check if extracted text is empty or just whitespace
-                 return f"[Could not extract text from PDF: {file_name} - The document might be image-based or empty.]"
-            return text
-        elif file_type == "application/vnd.openxmlformats-officedocument.wordprocessingml.document":
-            import docx
-            document = docx.Document(uploaded_file_object)
-            text = "\n".join([para.text for para in document.paragraphs])
-            if not text.strip(): # Check if extracted text is empty or just whitespace
-                return f"[Could not extract text from DOCX: {file_name} - The document might be empty or structured in a way that text isn't in paragraphs (e.g. tables only).]"
-            return text
-        else:
-            return f"[Unsupported file type: {file_type} for file: {file_name} - Cannot extract text.]"
+        gemini_client = GeminiClient(api_key=gemini_key)
+        perplexity_client = PerplexityClient(api_key=perplexity_key)
+        return gemini_client, perplexity_client
     except Exception as e:
-        st.error(f"Error processing file {uploaded_file_object.name}: {e}")
-        return f"[Error extracting text from {uploaded_file_object.name}: {str(e)}]"
+        st.sidebar.error(f"Failed to initialize API clients: {e}")
+        return None, None
 
-def generate_tailored_resume(job_description_text: str, base_resume_text: str) -> str:
-    """Placeholder for AI-driven resume tailoring."""
-    if not job_description_text or not base_resume_text:
-        return "Missing job description or base resume for tailoring."
-    return (f"--- TAILORED RESUME (Placeholder) ---\n"
-            f"Based on Job Description (first 50 chars): '{job_description_text[:50]}...'\n"
-            f"And Base Resume (first 50 chars): '{base_resume_text[:50]}...'\n"
-            f"This resume has been automatically tailored for {USER_NAME_PLACEHOLDER}.")
+# --- Main App UI ---
+st.title(f"🤖 {APP_TITLE}")
+st.write(f"Welcome, {USER_NAME_PLACEHOLDER}! This tool helps you create tailored job application documents.")
+st.info("Start by filling out your User Profile and Career History. Use the Style Analyzer to teach the agent your writing style.")
 
-def generate_tailored_cover_letter(job_description_text: str, base_cover_letter_text: str, user_name: str) -> str:
-    """Placeholder for AI-driven cover letter tailoring."""
-    if not job_description_text:
-        return "Missing job description for cover letter tailoring."
-    if not base_cover_letter_text: # Optional base
-        base_cover_letter_text = "[No base cover letter provided - generating generic one]"
-    return (f"--- TAILORED COVER LETTER (Placeholder) ---\n"
-            f"To: Hiring Manager\n"
-            f"From: {user_name}\n"
-            f"Regarding Job (first 50 chars): '{job_description_text[:50]}...'\n"
-            f"Content based on: '{base_cover_letter_text[:50]}...'\n"
-            f"This cover letter expresses {user_name}'s keen interest.")
+# --- Sidebar for Inputs ---
+st.sidebar.header("Document Generation Controls")
+st.session_state.doc_type = st.sidebar.selectbox(
+    "Select Document Type",
+    ("Resume", "KSC Response", "Cover Letter"),
+    key="doc_type_key"
+)
 
-def generate_tailored_ksc(job_description_text: str, base_ksc_text: str) -> str:
-    """Placeholder for AI-driven KSC response tailoring."""
-    if not job_description_text:
-        return "Missing job description for KSC tailoring."
-    if not base_ksc_text: # Optional base
-        base_ksc_text = "[No base KSC examples provided - generating generic responses]"
-    return (f"--- TAILORED KSC RESPONSE (Placeholder) ---\n"
-            f"For Job (first 50 chars): '{job_description_text[:50]}...'\n"
-            f"Drawing from KSC examples: '{base_ksc_text[:50]}...'\n"
-            f"Key Selection Criteria responses for {USER_NAME_PLACEHOLDER}.")
+st.sidebar.subheader("Job Details")
+st.session_state.job_desc = st.sidebar.text_area(
+    "Paste Job Description / KSC Here",
+    value=st.session_state.job_desc,
+    height=200,
+    key="job_desc_key",
+    help="For KSC/Cover Letter, paste the text here. For Resumes, this is optional."
+)
+st.session_state.company_name = st.sidebar.text_input(
+    "Company / Organization Name",
+    value=st.session_state.company_name,
+    key="company_name_key"
+)
+st.session_state.role_title = st.sidebar.text_input(
+    "Role Title",
+    value=st.session_state.role_title,
+    key="role_title_key"
+)
 
-# --- End of Placeholder Logic ---
+if st.sidebar.button("✨ Generate Document", type="primary", use_container_width=True):
+    gemini_client, perplexity_client = get_api_clients()
+    if not all([gemini_client, perplexity_client]):
+        st.stop()
+    if not st.session_state.job_desc and st.session_state.doc_type != "Resume":
+        st.sidebar.error("Please paste the job description or KSC question.")
+        st.stop()
 
-    st.header("3. Generate Tailored Documents")
-    if st.button("Generate Tailored Documents", key="generate_button"):
-        if not job_description:
-            st.error("Please paste the Job Description above.")
-        elif not base_resume:
-            st.error("Please upload your Base Resume.")
-        else:
-            with st.spinner("Processing documents... Please wait."):
-                # Extract text from uploaded files
-                base_resume_text = extract_text_from_file(base_resume)
-                base_cover_letter_text = extract_text_from_file(base_cover_letter) if base_cover_letter else ""
-                base_ksc_text = extract_text_from_file(base_ksc) if base_ksc else ""
+    with st.spinner("Processing... This may take a moment."):
+        try:
+            job_details = {"full_text": st.session_state.job_desc, "role_title": st.session_state.role_title}
+            user_profile = db.get_user_profile() or {}
+            experiences = db.get_all_experiences()
 
-                # Call placeholder generation functions
-                tailored_resume = generate_tailored_resume(job_description, base_resume_text)
-                tailored_cover_letter = generate_tailored_cover_letter(job_description, base_cover_letter_text, USER_NAME_PLACEHOLDER)
-                tailored_ksc_response = generate_tailored_ksc(job_description, base_ksc_text)
+            # Get company intelligence if company and role are provided
+            intel_booster = IntelligenceBoosterModule(perplexity_client)
+            company_intel = {}
+            if st.session_state.company_name and st.session_state.role_title:
+                company_intel = intel_booster.get_intelligence(st.session_state.company_name, st.session_state.role_title)
 
-                st.subheader("Tailored Resume")
-                st.text_area("Resume TXT", value=tailored_resume, height=200, key="resume_output_area")
-                st.download_button(
-                    label="Download Resume.txt",
-                    data=tailored_resume,
-                    file_name="Tailored_Resume.txt",
-                    mime="text/plain"
-                )
+            doc_generator = DocumentGenerator(gemini_client)
+            markdown_content = "" # Initialize empty string
 
-                st.subheader("Tailored Cover Letter")
-                st.text_area("Cover Letter TXT", value=tailored_cover_letter, height=200, key="cover_letter_output_area")
-                st.download_button(
-                    label="Download Cover_Letter.txt",
-                    data=tailored_cover_letter,
-                    file_name="Tailored_Cover_Letter.txt",
-                    mime="text/plain"
-                )
+            # --- REFACTORED LOGIC ---
+            # This logic now correctly handles the different return types from the generator functions.
+            if st.session_state.doc_type == "Resume":
+                markdown_content = doc_generator.generate_resume_markdown(user_profile, experiences)
+            elif st.session_state.doc_type == "KSC Response":
+                # This function returns a dict, so we extract the HTML/Markdown content
+                response_data = doc_generator.generate_ksc_response(st.session_state.job_desc, user_profile, experiences, company_intel, st.session_state.role_title)
+                markdown_content = response_data.get('html', '')
+            elif st.session_state.doc_type == "Cover Letter":
+                markdown_content = doc_generator.generate_cover_letter_markdown(user_profile, experiences, job_details, company_intel)
 
-                st.subheader("Tailored KSC Response")
-                st.text_area("KSC Response TXT", value=tailored_ksc_response, height=200, key="ksc_output_area")
-                st.download_button(
-                    label="Download KSC_Response.txt",
-                    data=tailored_ksc_response,
-                    file_name="Tailored_KSC_Response.txt",
-                    mime="text/plain"
-                )
-                st.success("Documents generated successfully!")
+            # Now, generate file versions for ALL document types from the final markdown
+            if markdown_content:
+                st.session_state.generated_content = {
+                    "html": markdown_content,
+                    "docx": doc_generator._create_docx_from_markdown(markdown_content),
+                    "pdf": doc_generator._create_pdf_from_markdown(markdown_content)
+                }
+            else:
+                st.session_state.generated_content = None
+                st.warning("Failed to generate content. The AI may have returned an empty response.")
 
-if __name__ == "__main__":
-    main()
+        except Exception as e:
+            st.error(f"An unexpected error occurred: {e}")
+            st.session_state.generated_content = None
+
+# --- Display Generated Content ---
+if st.session_state.generated_content:
+    st.divider()
+    st.header("Generated Document")
+    content = st.session_state.generated_content
+
+    # --- ENHANCEMENT: Descriptive filenames ---
+    doc_type_slug = st.session_state.doc_type.replace(' ', '_')
+    company_slug = st.session_state.company_name.replace(' ', '_') if st.session_state.company_name else "Company"
+    base_filename = f"{doc_type_slug}_for_{company_slug}_{USER_NAME_PLACEHOLDER.replace(' ', '_')}"
+
+    col1, col2 = st.columns(2)
+    with col1:
+        st.download_button(
+            "📥 Download as DOCX",
+            content.get("docx", b""),
+            f"{base_filename}.docx",
+            "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+        )
+    with col2:
+        st.download_button(
+            "📥 Download as PDF",
+            content.get("pdf", b""),
+            f"{base_filename}.pdf",
+            "application/pdf"
+        )
+
+    st.markdown("---")
+    st.subheader("Preview")
+    st.markdown(content.get("html", "<p>No content generated.</p>"), unsafe_allow_html=True)
