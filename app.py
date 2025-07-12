@@ -25,7 +25,7 @@ def main():
     )
 
 # --- Placeholder Document Processing Logic ---
-USER_NAME = "Nishant Jonas Dougall"
+from config import USER_NAME_PLACEHOLDER
 
 def extract_text_from_file(uploaded_file_object):
     """
@@ -72,7 +72,7 @@ def generate_tailored_resume(job_description_text: str, base_resume_text: str) -
     return (f"--- TAILORED RESUME (Placeholder) ---\n"
             f"Based on Job Description (first 50 chars): '{job_description_text[:50]}...'\n"
             f"And Base Resume (first 50 chars): '{base_resume_text[:50]}...'\n"
-            f"This resume has been automatically tailored for {USER_NAME}.")
+            f"This resume has been automatically tailored for {USER_NAME_PLACEHOLDER}.")
 
 def generate_tailored_cover_letter(job_description_text: str, base_cover_letter_text: str, user_name: str) -> str:
     """Placeholder for AI-driven cover letter tailoring."""
@@ -96,7 +96,7 @@ def generate_tailored_ksc(job_description_text: str, base_ksc_text: str) -> str:
     return (f"--- TAILORED KSC RESPONSE (Placeholder) ---\n"
             f"For Job (first 50 chars): '{job_description_text[:50]}...'\n"
             f"Drawing from KSC examples: '{base_ksc_text[:50]}...'\n"
-            f"Key Selection Criteria responses for {USER_NAME}.")
+            f"Key Selection Criteria responses for {USER_NAME_PLACEHOLDER}.")
 
 # --- End of Placeholder Logic ---
 
@@ -115,7 +115,7 @@ def generate_tailored_ksc(job_description_text: str, base_ksc_text: str) -> str:
 
                 # Call placeholder generation functions
                 tailored_resume = generate_tailored_resume(job_description, base_resume_text)
-                tailored_cover_letter = generate_tailored_cover_letter(job_description, base_cover_letter_text, USER_NAME)
+                tailored_cover_letter = generate_tailored_cover_letter(job_description, base_cover_letter_text, USER_NAME_PLACEHOLDER)
                 tailored_ksc_response = generate_tailored_ksc(job_description, base_ksc_text)
 
                 st.subheader("Tailored Resume")

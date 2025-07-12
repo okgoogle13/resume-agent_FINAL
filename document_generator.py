@@ -12,6 +12,7 @@ from sentence_transformers import SentenceTransformer
 from sklearn.metrics.pairwise import cosine_similarity
 import markdown
 import json
+from config import USER_NAME_PLACEHOLDER
 
 # Initialize the embedding model once when the module is loaded
 embedding_model = SentenceTransformer('all-MiniLM-L6-v2')

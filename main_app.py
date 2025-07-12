@@ -4,6 +4,7 @@ import database as db
 from api_clients import GeminiClient, PerplexityClient
 from intelligence_booster import IntelligenceBoosterModule
 from document_generator import DocumentGenerator
+from config import APP_TITLE, USER_NAME_PLACEHOLDER
 
 # --- Session State Management ---
 # Initialize session state variables to avoid errors on first run
@@ -14,7 +15,7 @@ if 'role_title' not in st.session_state: st.session_state.role_title = ""
 if 'generated_content' not in st.session_state: st.session_state.generated_content = None
 
 # --- Page Configuration ---
-st.set_page_config(page_title="Resume Agent", page_icon="🤖", layout="wide")
+st.set_page_config(page_title=APP_TITLE, page_icon="🤖", layout="wide")
 db.initialize_db()
 
 def get_api_clients():
@@ -34,8 +35,8 @@ def get_api_clients():
         return None, None
 
 # --- Main App UI ---
-st.title("🤖 Resume Agent")
-st.write("Welcome, Nishant! This tool helps you create tailored job application documents.")
+st.title(f"🤖 {APP_TITLE}")
+st.write(f"Welcome, {USER_NAME_PLACEHOLDER}! This tool helps you create tailored job application documents.")
 st.info("Start by filling out your User Profile and Career History. Use the Style Analyzer to teach the agent your writing style.")
 
 # --- Sidebar for Inputs ---
@@ -123,7 +124,7 @@ if st.session_state.generated_content:
     # --- ENHANCEMENT: Descriptive filenames ---
     doc_type_slug = st.session_state.doc_type.replace(' ', '_')
     company_slug = st.session_state.company_name.replace(' ', '_') if st.session_state.company_name else "Company"
-    base_filename = f"{doc_type_slug}_for_{company_slug}_Nishant_Dougall"
+    base_filename = f"{doc_type_slug}_for_{company_slug}_{USER_NAME_PLACEHOLDER.replace(' ', '_')}"
 
     col1, col2 = st.columns(2)
     with col1:
